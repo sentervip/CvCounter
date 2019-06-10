@@ -6,25 +6,34 @@
 //
 
 #include "counter.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc/imgproc.hpp"
 #include "fstream"
 #include <iostream>
 #include <string>
 #include <strstream>
-#include <vector>
 #include "math.h"
-
-using namespace cv;
-using namespace std;
 
 #define  FL_MIN_LENGTH   200
 #define  FL_MIN_AREA     400
-string int2str(int n,int n2=0) {
+#define  DELTA           (6)
+//#define  MIN_X           200
+#define  MIN_Y           300
+#define  MIN_CANDIDAT_DIAMETER    200
+#define  MIN_CANDIDAT_AREA        1000
+
+vector<vector<Point> > g_Contours;
+vector<strAreaTag> stAreaTag,g_CandidateArea;
+vector<strAreaTag> * pAreaTag = &stAreaTag;
+
+
+string int2str(int index,int n1=0,int n2=0) {
     
     strstream ss;
     string s;
-    ss << n;
+    ss<<index;
+    if(n1){
+    ss<<':';
+    ss << n1;
+    }
     if(n2){
         ss<<',';
         ss<<n2;
@@ -56,15 +65,41 @@ int sort_point(vector<Point2f> mc, int * valid, Mat &drawing)
     
     return (i - j+1);
 }
-
+void AreaGetMax(strAreaTag * area)
+{
+    int i =0;
+    while(i < g_Contours.at(area->index).size()){
+        area->x1 = MIN(area->x1, g_Contours.at(area->index).at(i).x);
+        area->x2 = MAX(area->x2, g_Contours.at(area->index).at(i).x);
+        area->y1 = MIN(area->y1, g_Contours.at(area->index).at(i).y);
+        area->y2 = MAX(area->y2, g_Contours.at(area->index).at(i).y);
+        i++;
+    }
+    
+}
+int GetCandicatArea(strAreaTag * area,int w,int h)
+{
+    int Cx = w>>1;
+    int Cy = h>>1;
+    int delta = w / DELTA;
+    
+    if(area->s > MIN_CANDIDAT_AREA && area->d > MIN_CANDIDAT_DIAMETER){
+        if( abs(area->moments.x - Cx) < delta && area->moments.y > MIN_Y ){
+            g_CandidateArea.push_back(*area);
+            return 1;
+        }
+    }
+    return -1;
+}
 int main()
 {
+    int iRet;
     int mc_valid[300] = {1};
     RNG g_rng(12345);
     Mat g_cannyMat_output;
     vector<Vec4i> g_vHierarchy;
-    Mat img = imread("/Users/tanyongzheng/Documents/svn-cvTest/cvTest/a7.png", 1);
-    imshow("OriImg", img);
+    Mat img = imread("/Users/tanyongzheng/Documents/CvCounter/cvTest/a7.png", 1);
+    //imshow("OriImg", img);
     
     GaussianBlur(img, img, Size(5, 5), 0.5);
     
@@ -83,64 +118,76 @@ int main()
             gray.at<uchar>(i, j) = (uchar)pix;
         }
     }
+    
     imwrite("1gray.jpg",gray);
     Mat bw;
+    
+    //s1 canny
     threshold(gray, bw, 0, 255, CV_THRESH_OTSU);
     imwrite("2bin.jpg", bw);
 
 
     Canny( bw, g_cannyMat_output, 20, 255, 3 );
-    vector<vector<Point> > g_vContours,gSortPoint2;
     
-    findContours(bw, g_vContours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);    
+    //s2 get contour
+    findContours(bw, g_Contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
     Mat markers = Mat::zeros(bw.size(), CV_32SC1);
     
-    for (size_t i = 0; i < g_vContours.size(); i++)
-        drawContours(markers, g_vContours, static_cast<int>(i), Scalar::all(static_cast<int>(i)+1), -1);
+    for (size_t i = 0; i < g_Contours.size(); i++)
+        drawContours(markers, g_Contours, static_cast<int>(i), Scalar::all(static_cast<int>(i)+1), -1);
     
     circle(markers, Point(5, 5), 3, CV_RGB(255, 255, 255), -1);
     imwrite("3contours.jpg", markers);
     
-    // 计算矩
-    vector<Moments> mu(g_vContours.size() );
-    for(unsigned int i = 0; i < g_vContours.size(); i++ )
-    { mu[i] = moments( g_vContours[i], false ); }
+    //s3 get center monments
+    vector<Moments> mu(g_Contours.size() );
+    for(unsigned int i = 0; i < g_Contours.size(); i++ )
+    { mu[i] = moments( g_Contours[i], false ); }
     
-    //  计算中心矩
-    vector<Point2f> mc( g_vContours.size() );
-    for( unsigned int i = 0; i < g_vContours.size(); i++ )
+    //  calc mc
+    vector<Point2f> mc( g_Contours.size() );
+    for( unsigned int i = 0; i < g_Contours.size(); i++ )
     {
-        mc[i] = Point2f( static_cast<float>(mu[i].m10/mu[i].m00), static_cast<float>(mu[i].m01/mu[i].m00 ));
+        mc[i] = Point2i( static_cast<float>(mu[i].m10/mu[i].m00), static_cast<float>(mu[i].m01/mu[i].m00 )) ;
+        //stAreaTag.at(i)->moments = &mc;
     }
     
-    // 绘制轮廓
+    
+    // s4 drawing contour and calc args of mc
     Mat drawing = Mat::zeros( g_cannyMat_output.size(), CV_8UC3 );
-    Scalar color = CV_RGB(255,255,255);
-    memset(mc_valid, 1, sizeof(mc_valid));
-    int sum = g_vContours.size();
-    sort_point(mc, mc_valid,drawing);
+    Scalar color = CV_RGB(0,255,0);
+    int sum = (int)g_Contours.size();
     int j =0;
-    for( unsigned int i = 0; i< g_vContours.size(); i++ )
+    strAreaTag  area;
+    for( unsigned int i = 0; i< g_Contours.size(); i++ )
     {
-        int len = arcLength( g_vContours[i], true );
-        int area = contourArea(g_vContours[i]);
-        
-        if(len < FL_MIN_LENGTH || area < FL_MIN_AREA){
-            //mc.erase(mc[i]);
+        area.d = arcLength( g_Contours[i], true );
+        area.s = contourArea(g_Contours[i]);
+        area.moments = mc.at(i);
+        area.index = i;
+        AreaGetMax(&area);
+        stAreaTag.push_back(area);
+        if(area.d < FL_MIN_LENGTH || area.s < FL_MIN_AREA){
             continue;
         }
-        printf("通过m00计算出轮廓[%d]的面积: (M_00) = %.2f \n OpenCV函数计算出的面积=%d , 长度: %d \n", i, mu[i].m00, area, len);
-        j++;
-        gSortPoint2.push_back(g_vContours[i]);
-        drawContours( drawing, g_vContours, i, Scalar(0,0,255), 2, 8, g_vHierarchy, 0, Point() );//绘制外层和内层轮廓
-        circle( drawing, mc[i], 3, Scalar(0,255,0), -1, 0.1f, 0 );//绘制圆
-        cout<<"int2str: "<<int2str(i)<<" mc: "<<mc[i]<<endl;
-        putText(drawing,int2str(area,len),mc[i],CV_FONT_HERSHEY_DUPLEX,0.8f,color);
-        //}
+        printf("[%d]s:%d , d: %d \n", i, mu[i].m00, area.s, area.d);
+        
+        iRet = GetCandicatArea(&area, drawing.cols,drawing.rows);
+        if(iRet > 0){
+            color = Scalar(0, 0, 255);
+        }else{
+            color = Scalar(0, 255,0);
+        }
+        drawContours( drawing, g_Contours, i, color, 2, 8, g_vHierarchy, 0, Point() );
+        
+        circle( drawing, mc[i], 3, Scalar(0,255,0), -1, 0.1f, 0 );
+        putText(drawing,int2str(i,stAreaTag.at(i).s,stAreaTag.at(i).d),mc[i],CV_FONT_HERSHEY_DUPLEX,0.5f,Scalar(255,255,255));
+        putText(drawing,int2str(area.moments.x, area.moments.y),Point2i(mc[i].x,mc[i].y-20),CV_FONT_HERSHEY_DUPLEX,  0.5f,Scalar(100,100,0));
+        
     }
-    sum = j;
+    
     putText(drawing,"Sum:",Point2f(0,50),CV_FONT_HERSHEY_DUPLEX,1.0f,color);
-    putText(drawing,int2str(sum),Point2f(100,50),CV_FONT_HERSHEY_DUPLEX,1.0f,color);
+    putText(drawing,int2str(g_CandidateArea.size()),Point2f(80,50),CV_FONT_HERSHEY_SIMPLEX,0.8f,Scalar(255,255,255));
     imwrite( "4draw.jpg", drawing );
     return 0;
 }
