@@ -98,7 +98,7 @@ int main()
     RNG g_rng(12345);
     Mat g_cannyMat_output;
     vector<Vec4i> g_vHierarchy;
-    Mat img = imread("/Users/tanyongzheng/Documents/CvCounter/cvTest/a7.png", 1);
+    Mat img = imread("D:/prj/CvCounter/a7.png", 1);
     //imshow("OriImg", img);
     
     GaussianBlur(img, img, Size(5, 5), 0.5);
@@ -125,7 +125,7 @@ int main()
     //s1 canny
     threshold(gray, bw, 0, 255, CV_THRESH_OTSU);
     imwrite("2bin.jpg", bw);
-
+	
 
     Canny( bw, g_cannyMat_output, 20, 255, 3 );
     
@@ -178,8 +178,7 @@ int main()
         }else{
             color = Scalar(0, 255,0);
         }
-        drawContours( drawing, g_Contours, i, color, 2, 8, g_vHierarchy, 0, Point() );
-        
+        drawContours( drawing, g_Contours, i, color, 2, 8, g_vHierarchy, 0, Point() );     
         circle( drawing, mc[i], 3, Scalar(0,255,0), -1, 0.1f, 0 );
         putText(drawing,int2str(i,stAreaTag.at(i).s,stAreaTag.at(i).d),mc[i],CV_FONT_HERSHEY_DUPLEX,0.5f,Scalar(255,255,255));
         putText(drawing,int2str(area.moments.x, area.moments.y),Point2i(mc[i].x,mc[i].y-20),CV_FONT_HERSHEY_DUPLEX,  0.5f,Scalar(100,100,0));
@@ -189,5 +188,6 @@ int main()
     putText(drawing,"Sum:",Point2f(0,50),CV_FONT_HERSHEY_DUPLEX,1.0f,color);
     putText(drawing,int2str(g_CandidateArea.size()),Point2f(80,50),CV_FONT_HERSHEY_SIMPLEX,0.8f,Scalar(255,255,255));
     imwrite( "4draw.jpg", drawing );
+	//waitKey();
     return 0;
 }

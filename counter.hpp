@@ -9,6 +9,7 @@
 #ifndef counter_hpp
 #define counter_hpp
 
+#include <stdint.h>
 #include <stdio.h>
 #include <vector>
 #include "opencv2/highgui/highgui.hpp"

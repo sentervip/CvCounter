@@ -1,3 +1,9 @@
+#for vs2010
+*.suo  
+*.sdf  
+*.opensdf  
+*.vcxproj.user
+
 # Prerequisites
 *.d
 
