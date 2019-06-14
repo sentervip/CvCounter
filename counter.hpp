@@ -29,6 +29,9 @@ typedef struct StrAreaTAG{
     uint8_t y2;
     cv::Point2i  moments;
     uint32_t index; //gContour index;
+	int      AverCenterIndex; //center point of cadicate points
+	int      AverCount;
+	cv::Point  AverPoint[100];  // aver point for calc
 }strAreaTag;
 
 

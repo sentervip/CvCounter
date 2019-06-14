@@ -11,10 +11,14 @@
 #include <string>
 #include <strstream>
 #include "math.h"
+#include <stdlib.h>
+#include<algorithm> 
 
 #define  FL_MIN_LENGTH   200
 #define  FL_MIN_AREA     400
-#define  DELTA           (6)
+#define  DELTA           (6)  // contour error   1/6 *w
+#define  DELTA_POINT     (10)  // point error  1/10 *w
+#define  SUM_CALC_POINT   (100)
 //#define  MIN_X           200
 #define  MIN_Y           300
 #define  MIN_CANDIDAT_DIAMETER    200
@@ -91,9 +95,58 @@ int GetCandicatArea(strAreaTag * area,int w,int h)
     }
     return -1;
 }
+int SortCmp(strAreaTag a1, strAreaTag a2)
+{
+	return a1.moments.y < a2.moments.y;
+}
+int CalcDist( vector<strAreaTag> * pData, int w, int h)
+{
+	int Cx = w>>1;
+	int Cy = h>>1;
+	int delta = 0;
+	unsigned long int sum= 0;
+	int i = 0,j = 0,pos =0,tmp=w;
+
+
+	//s1 find 最外围中心点，以mc(Xc,Yc).Xc为定点，取Y最小值
+	for( vector<Point>::iterator it = g_Contours.at(pData->at(0).index).begin(); 
+		 it != g_Contours.at(pData->at(0).index).end();it++){
+		if( abs( (*it).x - pData->at(0).moments.x) <  pData->at(0).d/8 ){	
+			
+			if((*it).y < tmp){
+				pos = i;
+			    tmp = (*it).y;
+				printf("find mc[%d]:%d,%d\n",pos,(*it).x, (*it).y );
+			}
+		}
+		i++;
+	}	  
+
+	//s2 计算最外围点横向<100 邻居点x的均值Xe，做深度采样点(Xe,Yc)
+	pData->at(0).AverCenterIndex = pos;
+	if(g_Contours.at(pData->at(0).index).size() > SUM_CALC_POINT *2 ){
+		delta = SUM_CALC_POINT;
+	}else{
+		delta = g_Contours.at(pData->at(0).index).size() >> 1;
+	}
+
+	for( i=pos-delta; i< pos+delta; i++,j++){
+		if(i>=0 &&  i< g_Contours.at(pData->at(0).index).size() ) // [0,size] ?
+			if(g_Contours.at(pData->at(0).index).at(i).x > pData->at(0).x1  &&
+			   g_Contours.at(pData->at(0).index).at(i).x < pData->at(0).x2  &&
+			   g_Contours.at(pData->at(0).index).at(i).y < pData->at(0).y2  &&
+			   g_Contours.at(pData->at(0).index).at(i).y > pData->at(0).y1  ){
+				sum += g_Contours.at(pData->at(0).index).at(i).x;
+				pData->at(0).AverPoint[j].x = g_Contours.at(pData->at(0).index).at(i).x;
+				pData->at(0).AverPoint[j].y = g_Contours.at(pData->at(0).index).at(i).y;
+			}
+	}
+	return 0;
+}
+
 int main()
 {
-    int iRet;
+    int iRet = 0;
     int mc_valid[300] = {1};
     RNG g_rng(12345);
     Mat g_cannyMat_output;
@@ -157,21 +210,24 @@ int main()
     Mat drawing = Mat::zeros( g_cannyMat_output.size(), CV_8UC3 );
     Scalar color = CV_RGB(0,255,0);
     int sum = (int)g_Contours.size();
-    int j =0;
+    //int j =0;
     strAreaTag  area;
+
     for( unsigned int i = 0; i< g_Contours.size(); i++ )
     {
+		memset(&area,0,sizeof(strAreaTag));
         area.d = arcLength( g_Contours[i], true );
         area.s = contourArea(g_Contours[i]);
-        area.moments = mc.at(i);
-        area.index = i;
-        AreaGetMax(&area);
-        stAreaTag.push_back(area);
+		area.moments = mc.at(i);
+		area.index = i;		
+		
+		stAreaTag.push_back(area);
         if(area.d < FL_MIN_LENGTH || area.s < FL_MIN_AREA){
             continue;
         }
-        printf("[%d]s:%d , d: %d \n", i, mu[i].m00, area.s, area.d);
-        
+
+		printf("[%d]s:%d , d: %d \n", i, mu[i].m00, area.s, area.d);
+		//AreaGetMax(&area);
         iRet = GetCandicatArea(&area, drawing.cols,drawing.rows);
         if(iRet > 0){
             color = Scalar(0, 0, 255);
@@ -184,7 +240,11 @@ int main()
         putText(drawing,int2str(area.moments.x, area.moments.y),Point2i(mc[i].x,mc[i].y-20),CV_FONT_HERSHEY_DUPLEX,  0.5f,Scalar(100,100,0));
         
     }
-    
+	//std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortCmp);
+	//CalcDist(&g_CandidateArea,drawing.cols,drawing.rows);
+	//const Point * ppt[1] = {g_CandidateArea.at(0).AverPoint};
+	//cv::fillPoly(drawing,ppt,&g_CandidateArea.at(0).AverCount,1,cv::Scalar(0xff,0xff,0),1); //yellow
+	//cv::fillPoly(drawing,g_CandidateArea.at(0).AverPoint,&(g_CandidateArea.at(0).AverCount),1,cv::Scalar(0xff,0xff,0),1); //yellow
     putText(drawing,"Sum:",Point2f(0,50),CV_FONT_HERSHEY_DUPLEX,1.0f,color);
     putText(drawing,int2str(g_CandidateArea.size()),Point2f(80,50),CV_FONT_HERSHEY_SIMPLEX,0.8f,Scalar(255,255,255));
     imwrite( "4draw.jpg", drawing );
