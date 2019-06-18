@@ -23,14 +23,16 @@ typedef struct StrAreaTAG{
     uint32_t s; //surface of contour
     uint32_t d; //diameter of contour
     uint32_t doc; // degree of confidence
-    uint8_t x1;
-    uint8_t x2; 
-    uint8_t y1;
-    uint8_t y2;
+    uint32_t x1;
+    uint32_t x2; 
+    uint32_t y1;
+    uint32_t y2;
     cv::Point2i  moments;
     uint32_t index; //gContour index;
-	int      AverCenterIndex; //center point of cadicate points
-	int      AverCount;
+	Point    captruePoint; 
+	uint32_t      AverCenterIndex; //center point of cadicate points       
+	int32_t      AverCount;
+	uint32_t     AverValue;
 	cv::Point  AverPoint[100];  // aver point for calc
 }strAreaTag;
 

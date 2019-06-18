@@ -69,9 +69,11 @@ int sort_point(vector<Point2f> mc, int * valid, Mat &drawing)
     
     return (i - j+1);
 }
-void AreaGetMax(strAreaTag * area)
+void AreaGetMax(strAreaTag * area, int w, int h)
 {
     int i =0;
+	area->x1 = w;
+	area->y1 = h;
     while(i < g_Contours.at(area->index).size()){
         area->x1 = MIN(area->x1, g_Contours.at(area->index).at(i).x);
         area->x2 = MAX(area->x2, g_Contours.at(area->index).at(i).x);
@@ -124,13 +126,14 @@ int CalcDist( vector<strAreaTag> * pData, int w, int h)
 
 	//s2 计算最外围点横向<100 邻居点x的均值Xe，做深度采样点(Xe,Yc)
 	pData->at(0).AverCenterIndex = pos;
+	pData->at(0).captruePoint = g_Contours.at(pData->at(0).index).at(pos);
 	if(g_Contours.at(pData->at(0).index).size() > SUM_CALC_POINT *2 ){
 		delta = SUM_CALC_POINT;
 	}else{
 		delta = g_Contours.at(pData->at(0).index).size() >> 1;
 	}
 
-	for( i=pos-delta; i< pos+delta; i++,j++){
+	for( i=pos-delta,j=0; i< pos+delta; i++){
 		if(i>=0 &&  i< g_Contours.at(pData->at(0).index).size() ) // [0,size] ?
 			if(g_Contours.at(pData->at(0).index).at(i).x > pData->at(0).x1  &&
 			   g_Contours.at(pData->at(0).index).at(i).x < pData->at(0).x2  &&
@@ -139,7 +142,12 @@ int CalcDist( vector<strAreaTag> * pData, int w, int h)
 				sum += g_Contours.at(pData->at(0).index).at(i).x;
 				pData->at(0).AverPoint[j].x = g_Contours.at(pData->at(0).index).at(i).x;
 				pData->at(0).AverPoint[j].y = g_Contours.at(pData->at(0).index).at(i).y;
+				j++;
 			}
+	}
+	if(j)  {
+		pData->at(0).AverCount = j;
+		pData->at(0).AverValue = sum /j;
 	}
 	return 0;
 }
@@ -151,7 +159,7 @@ int main()
     RNG g_rng(12345);
     Mat g_cannyMat_output;
     vector<Vec4i> g_vHierarchy;
-    Mat img = imread("D:/prj/CvCounter/a7.png", 1);
+    Mat img = imread("D:/prj/CvCounter/a1.png", 1);
     //imshow("OriImg", img);
     
     GaussianBlur(img, img, Size(5, 5), 0.5);
@@ -216,8 +224,8 @@ int main()
     for( unsigned int i = 0; i< g_Contours.size(); i++ )
     {
 		memset(&area,0,sizeof(strAreaTag));
-        area.d = arcLength( g_Contours[i], true );
-        area.s = contourArea(g_Contours[i]);
+        area.d =(long int) arcLength( g_Contours[i], true );
+        area.s =(int) contourArea(g_Contours[i]);
 		area.moments = mc.at(i);
 		area.index = i;		
 		
@@ -226,11 +234,11 @@ int main()
             continue;
         }
 
-		printf("[%d]s:%d , d: %d \n", i, mu[i].m00, area.s, area.d);
-		//AreaGetMax(&area);
+		printf("[%d], s:%d ,d:%d \n", i, (int)area.s, (int)area.d);
+		AreaGetMax(&area, drawing.cols, drawing.rows);
         iRet = GetCandicatArea(&area, drawing.cols,drawing.rows);
         if(iRet > 0){
-            color = Scalar(0, 0, 255);
+            color = Scalar(0, 0xff, 0xff);//yellow
         }else{
             color = Scalar(0, 255,0);
         }
@@ -240,14 +248,19 @@ int main()
         putText(drawing,int2str(area.moments.x, area.moments.y),Point2i(mc[i].x,mc[i].y-20),CV_FONT_HERSHEY_DUPLEX,  0.5f,Scalar(100,100,0));
         
     }
-	//std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortCmp);
-	//CalcDist(&g_CandidateArea,drawing.cols,drawing.rows);
-	//const Point * ppt[1] = {g_CandidateArea.at(0).AverPoint};
-	//cv::fillPoly(drawing,ppt,&g_CandidateArea.at(0).AverCount,1,cv::Scalar(0xff,0xff,0),1); //yellow
-	//cv::fillPoly(drawing,g_CandidateArea.at(0).AverPoint,&(g_CandidateArea.at(0).AverCount),1,cv::Scalar(0xff,0xff,0),1); //yellow
+	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortCmp);
+	CalcDist(&g_CandidateArea,drawing.cols,drawing.rows);
+	const Point * pts[1] = {g_CandidateArea.at(0).AverPoint};
+	cv::fillPoly(drawing,pts, &g_CandidateArea.at(0).AverCount,1,cv::Scalar(0xff,0xff,0)); 
+	char dist[40];
+    itoa(g_CandidateArea.at(0).captruePoint.y,  dist,   10);
+	putText(drawing,dist,Point2f(g_CandidateArea.at(0).captruePoint.x,g_CandidateArea.at(0).captruePoint.y/2),
+		                 CV_FONT_HERSHEY_DUPLEX,1.0f,Scalar(0,0,255));
+
+	cv::line(drawing,Point(g_CandidateArea.at(0).captruePoint.x,0),g_CandidateArea.at(0).captruePoint,Scalar(0,0,255),2);
     putText(drawing,"Sum:",Point2f(0,50),CV_FONT_HERSHEY_DUPLEX,1.0f,color);
     putText(drawing,int2str(g_CandidateArea.size()),Point2f(80,50),CV_FONT_HERSHEY_SIMPLEX,0.8f,Scalar(255,255,255));
     imwrite( "4draw.jpg", drawing );
-	//waitKey();
+	waitKey();
     return 0;
 }
