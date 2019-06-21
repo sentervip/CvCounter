@@ -159,7 +159,7 @@ int main()
     RNG g_rng(12345);
     Mat g_cannyMat_output;
     vector<Vec4i> g_vHierarchy;
-    Mat img = imread("D:/prj/CvCounter/a1.png", 1);
+    Mat img = imread("D:/prj/CvCounter/a6.png", 1);
     //imshow("OriImg", img);
     
     GaussianBlur(img, img, Size(5, 5), 0.5);
@@ -234,6 +234,7 @@ int main()
             continue;
         }
 
+		
 		printf("[%d], s:%d ,d:%d \n", i, (int)area.s, (int)area.d);
 		AreaGetMax(&area, drawing.cols, drawing.rows);
         iRet = GetCandicatArea(&area, drawing.cols,drawing.rows);
@@ -254,12 +255,19 @@ int main()
 	cv::fillPoly(drawing,pts, &g_CandidateArea.at(0).AverCount,1,cv::Scalar(0xff,0xff,0)); 
 	char dist[40];
     itoa(g_CandidateArea.at(0).captruePoint.y,  dist,   10);
-	putText(drawing,dist,Point2f(g_CandidateArea.at(0).captruePoint.x,g_CandidateArea.at(0).captruePoint.y/2),
-		                 CV_FONT_HERSHEY_DUPLEX,1.0f,Scalar(0,0,255));
+	strcat(dist," mm");
+	putText(drawing,dist,Point2f(g_CandidateArea.at(0).captruePoint.x,g_CandidateArea.at(0).captruePoint.y-50),
+		                 CV_FONT_HERSHEY_DUPLEX,0.7f,Scalar(0,0,255));
+	cv::arrowedLine(drawing,Point(g_CandidateArea.at(0).captruePoint.x,0),g_CandidateArea.at(0).captruePoint,Scalar(0,0,255),2);
 
-	cv::line(drawing,Point(g_CandidateArea.at(0).captruePoint.x,0),g_CandidateArea.at(0).captruePoint,Scalar(0,0,255),2);
-    putText(drawing,"Sum:",Point2f(0,50),CV_FONT_HERSHEY_DUPLEX,1.0f,color);
-    putText(drawing,int2str(g_CandidateArea.size()),Point2f(80,50),CV_FONT_HERSHEY_SIMPLEX,0.8f,Scalar(255,255,255));
+    cv::putText(drawing,"Sum:",Point2f(0,50),CV_FONT_HERSHEY_DUPLEX,1.0f,color);
+    cv::putText(drawing,int2str(g_CandidateArea.size()),Point2f(80,50),CV_FONT_HERSHEY_SIMPLEX,0.8f,Scalar(255,255,255));
+
+	cv::rectangle(drawing,Point(width-200,0),Point(width-170,20),Scalar(0, 0xff, 0xff),2);
+	cv::putText(drawing,"Candidate area",Point2f(width-160,20),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0, 0xff, 0xff));
+
+	cv::rectangle(drawing,Point(width-200,25),Point(width-170,40),Scalar(0, 0, 0xff),2);
+	cv::putText(drawing,"Dest area",Point2f(width-160,40),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0, 0, 0xff));
     imwrite( "4draw.jpg", drawing );
 	waitKey();
     return 0;
