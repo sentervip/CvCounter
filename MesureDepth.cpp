@@ -13,9 +13,11 @@
 #include "math.h"
 #include <stdlib.h>
 #include<algorithm> 
+#include <iostream>
+#include <deque>
 
-#define  FL_MIN_LENGTH   200
-#define  FL_MIN_AREA     400
+#define  FL_MIN_LENGTH   100
+#define  FL_MIN_AREA     70
 #define  DELTA           (6)  // contour error   1/6 *w
 #define  DELTA_POINT     (10)  // point error  1/10 *w
 #define  SUM_CALC_POINT   (100)
@@ -151,15 +153,288 @@ int CalcDist( vector<strAreaTag> * pData, int w, int h)
 	}
 	return 0;
 }
+//寻找二值图像上的第一个点
 
+//maskImg二值图像,标记
+
+//outPoint输出查找的点
+
+bool findFirstPoint(Mat &maskImg, Point &outPoint)
+
+{
+
+	bool success = false;
+
+	for (int i = 0; i < maskImg.rows; i++)
+
+	{
+
+		unsigned char *pData = (unsigned char*)(maskImg.data+i*maskImg.step);
+
+		for (int j = 0; j < maskImg.cols; j++)
+
+		{
+
+			if (pData[j] == 255)//找到第一个白色的点
+
+			{
+
+				success = true;
+
+				outPoint.x = j;
+
+				outPoint.y = i;
+
+				pData[j] = 0;//将此点像素设为0
+
+				break;
+
+			}
+
+		}
+
+		if (success)
+
+			break;
+
+	}
+
+	return success;
+
+}
+//八邻域中寻找曲线上某个点的下一个点
+//neiPoint八邻域点
+//currPt当前点
+bool findNextPoint(vector<Point> &neiPt, Mat &image, Point currPt, int currFlag, Point& outPt, int &outFlag)
+
+{
+	int i = currFlag;//0，6
+
+	int count = 1;
+
+	bool success = false;
+
+	while (count <= 7)
+	{
+		Point tpPt = currPt + neiPt[i];//邻域像素点
+
+		if (tpPt.x > 0 && tpPt.y > 0 && tpPt.x < image.cols && tpPt.y < image.rows)//在图像内部
+
+		{
+
+			if( ((unsigned char*)(image.data+tpPt.y*image.step))[tpPt.x]==255 )
+
+			{
+
+				outPt = tpPt;
+
+				outFlag = i;
+
+				success = true;
+
+				((unsigned char*)(image.data+tpPt.y*image.step))[tpPt.x]=0;
+
+				break;//跳出循环
+
+			}
+
+		}
+
+		if (count % 2)//奇数
+
+		{
+
+			i += count;
+
+			if (i > 7)
+
+			{
+
+				i -= 8;
+
+			}
+
+		}
+
+		else
+
+		{
+
+			i += -count;
+
+			if (i < 0)
+
+			{
+
+				i += 8;
+
+			}
+
+		}
+		count++;
+	}
+	return success;
+}
+//寻找曲线 ：
+void findLines(Mat &binaryImg, vector<deque<Point>> &outLines)
+
+{
+
+	//八邻域
+
+	vector<Point> neighborPtVec;
+
+	neighborPtVec.push_back(Point(-1,-1));
+
+	neighborPtVec.push_back(Point(0,-1));
+
+	neighborPtVec.push_back(Point(1,-1));
+
+	neighborPtVec.push_back(Point(1,0));
+
+
+
+	neighborPtVec.push_back(Point(1,1));
+
+	neighborPtVec.push_back(Point(0,1));
+
+	neighborPtVec.push_back(Point(-1,1));
+
+	neighborPtVec.push_back(Point(-1,0));
+
+
+
+	Point firstPt;
+
+	while (findFirstPoint(binaryImg, firstPt))
+
+	{
+
+		deque<Point> line;//点的队列
+
+		line.push_back(firstPt);//存储第一个点
+
+
+
+		//由于第一个点不一定是线段的起始位置，
+
+		//因此两个方向都要查找
+
+		Point currPt = firstPt;//当前点
+
+		int currFlag = 0;//标志
+
+		Point nextPt;//下一个点
+
+		int nextFlag;//下一点的标志
+
+		while (findNextPoint(neighborPtVec, binaryImg, currPt, currFlag, nextPt, nextFlag))//一端
+
+		{
+
+			line.push_back(nextPt);//压入队列
+
+			currPt = nextPt;
+
+			currFlag = nextFlag;
+
+		}
+
+		//找另一端
+
+		currPt = firstPt;
+
+		currFlag = 0;
+
+		while (findNextPoint(neighborPtVec, binaryImg, currPt, currFlag, nextPt, nextFlag))
+
+		{
+
+			line.push_front(nextPt);
+
+			currPt = nextPt;
+
+			currFlag = nextFlag;//邻域与中心像素的位置
+
+		}
+
+		if (line.size() > 10)
+
+		{
+
+			outLines.push_back(line);
+
+		}
+
+	}
+
+}
+//用deque<Point> 描述曲线
+
+//随机取色画曲线
+
+Scalar random_color(RNG& _rng)
+
+{
+
+	int icolor = (unsigned)_rng;
+
+	return Scalar(icolor & 0xFF, (icolor >> 8) & 0xFF, (icolor >> 16) & 0xFF);
+
+}
 int main()
+{
+	Mat gray,Dest;
+	Mat bw = Mat::zeros(gray.size(),CV_8U);
+	Mat img = imread("D:/prj/CvCounter/z1.bmp", 1);
+	//cvtColor(img,bw,COLOR_BGR2GRAY);
+	GaussianBlur(img, bw, Size(15, 15), 0.5);
+	printf("bw, depth:%d,channel:%d\n",bw.depth(),bw.channels());
+
+	//s1 canny	
+	//equalizeHist(img,bw);
+	//threshold(gray, bw, 150, 200, CV_THRESH_OTSU);
+	imwrite("2bin.bmp", bw);
+
+	Mat g_cannyMat_output = Mat::zeros(bw.size(),CV_8U);
+	Canny( bw, g_cannyMat_output,150, 254,3,true);
+	//Sobel(bw,g_cannyMat_output,CV_8UC1,1,1,1);
+	//Scharr(bw,g_cannyMat_output,CV_8UC1,0,1,1,3);
+	//Laplacian(bw,g_cannyMat_output,CV_8U,1,1,0,4);
+	imwrite("2canny.bmp",g_cannyMat_output);
+	//filter2D();	//get lines 
+	vector<deque<Point>> lines;
+	findLines(g_cannyMat_output, lines);
+	cout << lines.size() << endl;
+
+	//draw lines
+	Mat draw_img;
+	cvtColor(g_cannyMat_output,draw_img,CV_GRAY2BGR);
+	RNG rng(123);
+	Scalar color;
+	for (int i = 0; i < lines.size(); i++)
+	{
+    	color = random_color(rng);
+		for (int j = 0; j < lines[i].size(); j++)
+		{		
+			draw_img.at<Vec3b>(lines[i][j]) = Vec3b(color[0], color[1], color[2]);
+		}
+	}
+	imshow("draw_img", draw_img);
+	imwrite("draw_img.jpg", draw_img);
+	waitKey(0);
+	return 0;
+}
+
+
+int main2()
 {
     int iRet = 0;
     int mc_valid[300] = {1};
     RNG g_rng(12345);
     Mat g_cannyMat_output;
     vector<Vec4i> g_vHierarchy;
-    Mat img = imread("D:/prj/CvCounter/a6.png", 1);
+    Mat img = imread("D:/prj/CvCounter/z1.jpg", 1);
     //imshow("OriImg", img);
     
     GaussianBlur(img, img, Size(5, 5), 0.5);
