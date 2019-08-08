@@ -19,6 +19,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\counter.hpp" />
+    <ClInclude Include="..\line.h" />
     <ClInclude Include="..\MesureDepth.hpp" />
     <ClInclude Include="include\opencv2\calib3d.hpp" />
     <ClInclude Include="include\opencv2\core.hpp" />
@@ -42,7 +44,7 @@
     <ClInclude Include="include\opencv2\world.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\MesureDepth.cpp" />
+    <ClCompile Include="..\ultraSonorFrontProcess.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{E3E5D880-432F-439C-84DB-88B721E8123F}</ProjectGuid>
