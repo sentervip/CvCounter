@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include<algorithm> 
 #include "line.h"
+#include "getEnvelop.hpp"
 
 #define  FL_MIN_LENGTH   200
 #define  FL_MIN_AREA     400
@@ -18,6 +19,7 @@
 #define  MIN_Y           300
 #define  MIN_CANDIDAT_DIAMETER    (200)
 #define  MIN_CANDIDAT_AREA        (1000)
+#define  POINT_NUM        2584
 vector<vector<Point> > g_Contours;
 vector<strAreaTag> g_AllArea,g_CandidateArea;
 vector<strAreaTag> * pAreaTag = &g_AllArea;
@@ -154,38 +156,72 @@ int main()
     vector<Vec4i> g_vHierarchy;
     Mat img ;//=imread("D:/prj/z1/src/CvCounter/zjY.png", 1);
     //imshow("OriImg", img);
+	env_detect* m_envlop = new env_detect();
     
-	Mat m_line = Mat(2584,1,CV_16SC1,iDataLine);
+	Mat m_line = Mat(POINT_NUM,1,CV_16SC1,iDataLine);
+	Mat m_lineEnvelop = Mat(POINT_NUM,1,CV_16SC1);
 	//memcpy(g_line.data,(char*)&iDataLine,2584*2);  // int64 maybe not ok
 	printf("[0]=%d,[1000]=%d,[2000]=%d,[2583]=%d\n", m_line.at<short>(0,0),m_line.at<short>(1000,0),m_line.at<short>(2000,0),m_line.at<short>(2583,0));
 	//printf("[0]=%d,[100]\n", g_line.at<short>(1000,0));
+	/** copy to img
 	Mat m_Fpga(2584,640,CV_16SC1);
 	for(i=0; i<640;i++){
 		m_line.copyTo(m_Fpga.colRange(i,i+1)); //error overflow;
 		//printf("[0][%d]=%d,[1000]=%d,[2000]=%d,[2583]=%d\n",i, m_Fpga.at<short>(0,i),m_Fpga.at<short>(1000,i),m_Fpga.at<short>(2000,i),m_Fpga.at<short>(2583,i));
 	}
+	*/
 	//s2 blur
-    GaussianBlur(m_Fpga, img, Size(5, 5), 1, 1);
-	printf("cmp：[100]%d:%d, [1000]%d:%d", m_Fpga.at<short>(100,100),img.at<short>(100,100), m_Fpga.at<short>(1000,400),img.at<short>(1000,400));
-    int width = m_Fpga.cols;
-    int height = m_Fpga.rows;
-    imwrite("1gray.jpg",m_Fpga);
-    Mat bw;
+    GaussianBlur(m_line, m_line, Size(15, 15), 1, 1);
+	//printf("cmp：[100]%d:%d, [1000]%d:%d", m_Fpga.at<short>(100,100),img.at<short>(100,100), m_Fpga.at<short>(1000,400),img.at<short>(1000,400));
+    int width = m_line.cols;
+    int height = m_line.rows;
+    imwrite("1gray.jpg",m_line);
 
     //s2 abs
+	fstream absFile("D:/prj/z1/src/CvCounter/2abs.txt",ios::out|ios::trunc);
+	if(!absFile.is_open()){
+	    printf("error: can not open 2abs.txt\n");
+		absFile.close();
+		return -2;
+	}
+	char str[20]={0,0};
 	for( i=0; i<height ;i++){
-		for( j=0; j<width; j++)
-			if(m_Fpga.at<short>(i,j) < 0){
-				m_Fpga.at<short>(i,j) = - m_Fpga.at<short>(i,j);
+		for( j=0; j<width; j++){
+			if(m_line.at<short>(i,j) < 0){
+				m_line.at<short>(i,j) = - m_line.at<short>(i,j);
 			}else{
 				iRet++;
 			}
+			sprintf(str,"%d,",m_line.at<short>(i,j));
+			//absFile<<m_line.at<short>(i,j)<<",";
+			absFile.write(str, strlen(str) );
+		}
 	}
-		
-    //threshold(m_Fpga, bw, 0, 255, CV_THRESH_OTSU);
-    imwrite("2abs.jpg", m_Fpga);
+	absFile.close();
 	
-    
+	//s3 get envelop
+    fstream envFile("D:/prj/z1/src/CvCounter/3envelop.txt",ios::out|ios::trunc);
+	if(!envFile.is_open()){
+	    printf("error: can not open 3envelop.txt\n");
+		envFile.close();
+		return -2;
+	}
+	memset(str,0,sizeof(str));
+	short t1,t2;
+	m_envlop->env_half((short *)m_line.data,(short *)m_lineEnvelop.data,POINT_NUM);
+
+	//s4 blur and save
+	GaussianBlur(m_lineEnvelop, m_lineEnvelop, Size(15, 15), 1, 1);
+	for( i=0; i<height ;i++){
+		for( j=0; j<width; j++){
+			//t1 = m_line.at<short>(i,j) ;
+			//m_lineEnvelop.at<short>(i,j) = m_envlop->env_half1(t1);
+			
+			sprintf(str,"%d,",m_lineEnvelop.at<short>(i,j));
+			envFile.write(str, strlen(str) );
+		}
+	}
+	envFile.close();
 	waitKey();
     return 0;
 }

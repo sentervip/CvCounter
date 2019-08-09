@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\counter.hpp" />
+    <ClInclude Include="..\getEnvelop.hpp" />
     <ClInclude Include="..\line.h" />
     <ClInclude Include="..\MesureDepth.hpp" />
     <ClInclude Include="include\opencv2\calib3d.hpp" />
