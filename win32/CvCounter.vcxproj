@@ -45,7 +45,7 @@
     <ClInclude Include="include\opencv2\world.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\MesureSliderWnd.cpp" />
+    <ClCompile Include="..\counter.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{E3E5D880-432F-439C-84DB-88B721E8123F}</ProjectGuid>
