@@ -25,9 +25,9 @@ float StandDev;
 typedef struct StrAreaTAG{
 	uint32_t lineIndex; //line index
 	uint32_t mcIndex; //monmet index;
-	struct StrMonmentTAG  mc;
-    uint32_t s; //surface of contour
-    uint32_t d; //diameter of contour
+	//struct StrMonmentTAG  mc;
+    //uint32_t s; //surface of contour
+    //uint32_t d; //diameter of contour
     uint32_t doc; // degree of confidence
 	Point    captruePoint; 
 	int32_t  boxUp;
