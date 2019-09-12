@@ -1,10 +1,3 @@
-//
-//  counter.cpp
-//  cvTest
-//.
-//  Copyright © 2017年 HFY. All rights reserved.
-//
-
 #include "counter.hpp"
 #include "fstream"
 #include <iostream>
@@ -27,8 +20,8 @@
 #define  MIN_Y           300
 #define  MIN_CANDIDAT_DIAMETER    200
 #define  MIN_CANDIDAT_AREA        700
-#define  MIN_DISTANCE_CLUSTER     20
-#define  MIN_IMG_Y                MIN_DISTANCE_CLUSTER
+#define  MIN_DISTANCE_CLUSTER     6
+#define  MIN_IMG_Y                20 //MIN_DISTANCE_CLUSTER
 #define  CALC_WIDTH_UP            1
 #define  CALC_WIDTH_DOWN          2
 
@@ -62,7 +55,7 @@ int sort_point(vector<Point2f> mc, int * valid, Mat &drawing)
     
     Point2f pt_tmp;
     int i =0,j=0;
-    for(vector<cv::Point2f>::iterator iter = mc.begin(); iter != mc.end(); ++iter){
+    for(vector<cv::Point2f>::iterator iter = mc.begin(); iter != mc.end(); ){
         if(i>0) //s1: repeate
             if( abs(iter->x - pt_tmp.x) < 2 || abs(iter->y - pt_tmp.y) < 2 ){
                 mc.erase(iter);
@@ -70,7 +63,9 @@ int sort_point(vector<Point2f> mc, int * valid, Mat &drawing)
                 putText(drawing,int2str(i),pt_tmp,CV_FONT_HERSHEY_DUPLEX,0.8f,CV_RGB(255,0,0));
                 valid[i] = 0;
                 j++;
-            }
+			}else{
+				iter++;
+			}
         i++;
         pt_tmp = *iter;
         
@@ -79,18 +74,7 @@ int sort_point(vector<Point2f> mc, int * valid, Mat &drawing)
     return (i - j+1);
 }
 void AreaGetMax(strAreaTag * area, int w, int h)
-{
-    int i =0;
-	area->x1 = w;
-	area->y1 = h;
-    while(i < g_Contours.at(area->mcIndex).size()){
-        area->x1 = MIN(area->x1, g_Contours.at(area->mcIndex).at(i).x);
-        area->x2 = MAX(area->x2, g_Contours.at(area->mcIndex).at(i).x);
-        area->y1 = MIN(area->y1, g_Contours.at(area->mcIndex).at(i).y);
-        area->y2 = MAX(area->y2, g_Contours.at(area->mcIndex).at(i).y);
-        i++;
-    }
-    
+{    
 }
 
 int SortCmp(StrMonmentTag a1, StrMonmentTag a2)
@@ -100,6 +84,18 @@ int SortCmp(StrMonmentTag a1, StrMonmentTag a2)
 int SortCmpUp(int a1, int a2)
 {
 	return a1 < a2;
+}
+int SortArea(strAreaTag a1, strAreaTag a2)
+{
+	return g_MonmentTag.at(a1.mcIndex).s > g_MonmentTag.at(a2.mcIndex).s;
+}
+int SortDoc(strAreaTag a1, strAreaTag a2)
+{
+	return a1.doc > a2.doc;
+}
+int SortUp(strAreaTag a1, strAreaTag a2)
+{
+	return a1.boxUp > a2.boxUp;
 }
 
 int GetDistance(CvPoint pointO,CvPoint pointA )  
@@ -117,6 +113,10 @@ int PointClustering(vector<Vec2f> _pts, vector<int> & out)
 	vector<int> pts;
 
 	//get pts and sort
+	if(_pts.size() <=1){
+		printf("%s, size：%d\n",__FUNCTION__, _pts.size());
+		return 0;
+	}
 	for(i=0;i< _pts.size(); i++){
 		pts.push_back(cvRound(_pts[i][0]) );
 	}
@@ -144,7 +144,7 @@ int PointClustering(vector<Vec2f> _pts, vector<int> & out)
 	}
 	return 0;
 }
-int Match2Moment(vector<StrMonmentTag> MomentTag,  int lineY)
+int LineMatch2Moment(vector<StrMonmentTag> MomentTag,  int lineY)
 {
     vector<StrMonmentTag>::iterator it;
 	int index = 0;
@@ -152,7 +152,9 @@ int Match2Moment(vector<StrMonmentTag> MomentTag,  int lineY)
 	int Min = 500;
 
 	for(it=MomentTag.begin();it != MomentTag.end(); it++){
-		if(abs(it->mc.y-lineY) <Min && it->s > (MomentTag.at(0).s/2) && (it->d > FL_MIN_LENGTH) ){
+		if(abs(it->mc.y - lineY) < Min 
+			&& it->s > FL_MIN_AREA  
+			&& (it->d > FL_MIN_LENGTH) ){
 			Min = it->mc.y;
 			index = i;
 		}
@@ -166,44 +168,57 @@ int CalcWidth(cv::Mat &bin,Point2i pt, int len, int UpOrDown)
 	int sum =0;
 	int width = 0;
 
-	
-	while(aver < 0.7*len){
-		for(int i=-len/2;i<len/2; i++){
-			sum += bin.at<int>(pt.y,IMG_WIDTH/2+i);
-		}
-		aver = sum/len;
+		
 		if(UpOrDown == CALC_WIDTH_UP){
-		    if(pt.y >MIN_IMG_Y){
-				pt.y--;
-				width++;
-			}else{
-				printf("error, %s,invalid img1",__FUNCTION__);
-				width = -1;
-				break;
+			while(--pt.y > MIN_IMG_Y){
+					sum = 0;
+					for(int i=-len/2;i<len/2; i++){
+						sum += bin.at<uchar>(pt.y,IMG_WIDTH/2+i);
+						//sum += bin.at<uchar>(1,IMG_WIDTH/2+i);
+					}
+				aver = sum/len;
+				if( aver < 0.3 *0xff){ //有效黑色区域计算			
+					width++;
+				}else if(width == 0){ //在本白线内部
+					printf("waring, %s,innerLine %d",__FUNCTION__, pt.y);
+					continue;
+				}else if( aver > 0.7 *0xff){
+					break;
+				}
 			}
-	   }else{
-		   if(pt.y >MIN_IMG_Y){
-			   pt.y++;
-			   width++;
-		   }else{
-			   printf("error, %s,invalid img2",__FUNCTION__);
-			   width = -1;
-			   break;
-		   }
-		}
+	    }else{
+			while(++pt.y < IMG_HEIGH){
+				sum = 0;
+				for(int i=-len/2;i<len/2; i++){
+					sum += bin.at<uchar>(pt.y,IMG_WIDTH/2+i);
+					//sum += bin.at<uchar>(1,IMG_WIDTH/2+i);
+				}
+				aver = sum/len;
+				if( aver < 0.3 *0xff){ //有效黑色区域计算			
+					width++;
+				}else if(width == 0){ //在本白线内部
+					printf("waring, %s,innerLine %d",__FUNCTION__, pt.y);
+					continue;
+				}else if( aver > 0.7 *0xff){
+					break;
+				}
+			}
 	}
 	return width;
 }
 int main()
 {
+	char dist[40];
     int i,j,iRet = 0;
+	float depth;
 	Point pt1, pt2;
     int mc_valid[300] = {1};
     RNG g_rng(12345);
     Mat g_cannyMat_output;
     vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
-    Mat m_origin = imread("D:/prj/z1/src/img/0904_ai/4.png", 1.0);
+	Mat DestRGB;
+    Mat m_origin = imread("D:/prj/z1/src/img/0904_ai/5.png", 1.0);
     
     //s1 preprocess
     GaussianBlur(m_origin, m_origin, Size(15, 15), 1.0);   
@@ -222,19 +237,22 @@ int main()
             m_gray.at<uchar>(i, j) = (uchar)pix;
         }
     }
-	imwrite("gray.jpg", m_gray);
+	imwrite("0gray.jpg", m_gray);
 
     //morphology
+	
 	int g_nElementShape = MORPH_RECT;
 	Mat element = getStructuringElement(g_nElementShape, Size(5, 5) );
 	morphologyEx(m_gray, m_gray, CV_MOP_ERODE, element);  imwrite("1erode.jpg",m_gray);
 	element = getStructuringElement(g_nElementShape, Size(7, 7) );
 	morphologyEx(m_gray, m_gray, CV_MOP_DILATE, element);
+	
     imwrite("2dilate.jpg",m_gray);
+
     Mat m_bin;
     
     //Bin
-    threshold(m_gray, m_bin, 0, 255, CV_THRESH_OTSU);
+    threshold(m_gray, m_bin, 10, 255, CV_THRESH_OTSU);
     imwrite("3bin.jpg", m_bin);
 	
 	//lines
@@ -243,21 +261,38 @@ int main()
 	#if 1
 	vector<Vec2f> lines; 
 	HoughLines(m_bin, lines, 1, CV_PI/2, 100);
-	if(lines.size() <1){
-		printf("invalid img\n");
-		return  -1;
-	}
-	for( i = 0; i < lines.size(); i++ )
+	for(vector<Vec2f>::iterator it = lines.begin(); it != lines.end(); )
 	{
-		float rho = lines[i][0], theta = lines[i][1];
-		
+		//float rho = lines[i][0], theta = lines[i][1];
+		float rho = it->val[0];
+		float theta = it->val[1];;
 		double a = cos(theta), b = sin(theta);
 		double x0 = a*rho, y0 = b*rho;
 		pt1.x = cvRound(x0 + width*(-b));
 		pt1.y = cvRound(y0 + width*(a));
 		pt2.x = cvRound(x0 - width*(-b));
 		pt2.y = cvRound(y0 - width*(a));
-		line( m_line, pt1, pt2, Scalar(0,0,255), 1, CV_AA);
+		if(y0 < MIN_IMG_Y){
+			it = lines.erase(it);
+		}else{
+			line( m_line, pt1, pt2, Scalar(0,0,255), 1, CV_AA);
+			it++; 
+		}
+	}
+	if(lines.size() <1){
+		printf("invalid img\n");
+		return  EINVALID_ARG;
+	}else if(lines.size() == 1){
+		//measure and show		
+		cv::cvtColor(m_gray,DestRGB,COLOR_GRAY2RGB);
+		memset(dist,0,sizeof(dist));
+		depth = lines.at(0).val[0]; // 1540/m_osc*sampeRate/1000000*iRet;
+		sprintf(dist," %0.1f mm", depth);
+		putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,lines.at(0).val[0]/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
+		cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),Point2i(width/2,lines.at(0).val[0]),Scalar(0,0,255),1);
+		imwrite( "Dest.jpg", DestRGB );
+		//waitKey();
+		return 0;
 	}
 	#else
         vector<Vec4i> lines;
@@ -272,9 +307,10 @@ int main()
 	imwrite("4Line.jpg", m_line);
     
     //s2 get contour
-	Canny( m_bin, g_cannyMat_output, 20, 255);
-    findContours(m_bin, g_Contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
-    Mat markers = Mat::zeros(m_bin.size(), CV_32SC1);
+	Mat bMat = m_bin.clone();
+	Canny( bMat, g_cannyMat_output, 20, 255);
+    findContours(bMat, g_Contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+    Mat markers = Mat::zeros(bMat.size(), CV_32SC1);
     
     for ( i = 0; i < g_Contours.size(); i++)
         drawContours(markers, g_Contours, static_cast<int>(i), Scalar::all(static_cast<int>(i)+1), -1);
@@ -295,8 +331,7 @@ int main()
     {
         mc[i] = Point2i( static_cast<float>(mu[i].m10/mu[i].m00), static_cast<float>(mu[i].m01/mu[i].m00 )) ;
     }
-    
-    
+      
     // drawing contour and calc args of mc
     Mat drawing = Mat::zeros( g_cannyMat_output.size(), CV_8UC3 );
     Scalar color = CV_RGB(0,255,0);
@@ -325,49 +360,70 @@ int main()
 	imwrite("6mc.jpg", drawing);
 	if(g_MonmentTag.size() >2 ){
 	    std::sort(g_MonmentTag.begin(),g_MonmentTag.end(),SortCmp);
-	}
+	}else if(g_MonmentTag.size() <=1){
+	    printf("please touch up");
+	    return ECLOSED;
+	}else;
+    printf("tour over");
 
 	//s4 candidate,match to lines
 	strAreaTag area;
-	for( size_t i = 0; i < g_lineY.size(); i++){
+	i = 0;
+	for( vector<int>::iterator it = g_lineY.begin(); it !=g_lineY.end(); i++){
+	   if(g_lineY.at(i) < MIN_IMG_Y){
+		   g_lineY.erase(it);
+		   continue;
+	   }else{
+		   it++;
+	   }
 	   area.lineIndex = i;
-       area.mcIndex = Match2Moment(g_MonmentTag, g_lineY.at(i));
+       area.mcIndex = LineMatch2Moment(g_MonmentTag, g_lineY.at(i));
 	   //area.mc = g_MonmentTag.at(area.mcIndex);
+	   area.s = g_MonmentTag.at(area.mcIndex).s;
 	   area.captruePoint = Point2i(IMG_WIDTH/2, g_lineY.at(i));	   
 	   area.boxUp = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_UP);
+	   //area.boxDown = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_DOWN);
+	   g_CandidateArea.push_back(area);
 	}
 
-	return 1;
-	    //iRet = GetCandicatArea(&area, drawing.cols,drawing.rows);
-        if(iRet > 0){
-            color = Scalar(0, 0xff, 0xff);//yellow
-        }else{
-            color = Scalar(0, 255,0);
-        }
-   //     drawContours( drawing, g_Contours, i, color, 2, 8, g_vHierarchy, 0, Point() );     
-   //     circle( drawing, mc[i], 3, Scalar(0,255,0), -1, 0.1f, 0 );
-//        putText(drawing,int2str(i,g_AllArea.at(i).s,g_AllArea.at(i).d),mc[i],CV_FONT_HERSHEY_DUPLEX,0.5f,Scalar(255,255,255));
-        //putText(drawing,int2str(area.moments.x, area.moments.y),Point2i(mc[i].x,mc[i].y-20),CV_FONT_HERSHEY_DUPLEX,  0.5f,Scalar(100,100,0));  
-	//std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortCmp);
-//	CalcDist(&g_CandidateArea,drawing.cols,drawing.rows);
-	const Point * pts[1] = {g_CandidateArea.at(0).AverPoint};
-	cv::fillPoly(drawing,pts, &g_CandidateArea.at(0).AverCount,1,cv::Scalar(0xff,0xff,0)); 
-	char dist[40];
-    itoa(g_CandidateArea.at(0).captruePoint.y,  dist,   10);
-	strcat(dist," mm");
-	putText(drawing,dist,Point2f(g_CandidateArea.at(0).captruePoint.x,g_CandidateArea.at(0).captruePoint.y-50),
-		                 CV_FONT_HERSHEY_DUPLEX,0.7f,Scalar(0,0,255));
-	cv::arrowedLine(drawing,Point(g_CandidateArea.at(0).captruePoint.x,0),g_CandidateArea.at(0).captruePoint,Scalar(0,0,255),2);
+	vector<strAreaTag> _CandidateArea(g_CandidateArea);      
+	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortArea);
+	std::sort(_CandidateArea.begin(),_CandidateArea.end(),SortUp);
+	for( size_t i = 0; i < g_lineY.size(); i++){
+		g_CandidateArea.at(i).wws = g_CandidateArea.at(i).s/g_CandidateArea.at(0).s * 100; 
+		j = g_lineY.size();                                          
+		while(--j >= 0){
+			if(g_CandidateArea.at(i).lineIndex == _CandidateArea.at(j).lineIndex){
+				g_CandidateArea.at(i).bws = _CandidateArea.at(j).boxUp*100/_CandidateArea.at(0).boxUp;
+				break;
+			}
+		}
+		g_CandidateArea.at(i).doc = g_CandidateArea.at(i).bws + g_CandidateArea.at(i).wws;
+	}
+	int DestLine = 0;
+	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortDoc);
+	if(g_CandidateArea.at(0).doc == g_CandidateArea.at(1).doc){
+		if(g_CandidateArea.at(0).wws > g_CandidateArea.at(1).wws){
+			DestLine = 0;
+		}else{
+			DestLine = 1;
+		}
+	}
 
-    cv::putText(drawing,"Sum:",Point2f(0,50),CV_FONT_HERSHEY_DUPLEX,1.0f,color);
-    cv::putText(drawing,int2str(g_CandidateArea.size()),Point2f(80,50),CV_FONT_HERSHEY_SIMPLEX,0.8f,Scalar(255,255,255));
-
-	cv::rectangle(drawing,Point(width-200,0),Point(width-170,20),Scalar(0, 0xff, 0xff),2);
-	cv::putText(drawing,"Candidate area",Point2f(width-160,20),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0, 0xff, 0xff));
-
-	cv::rectangle(drawing,Point(width-200,25),Point(width-170,40),Scalar(0, 0, 0xff),2);
-	cv::putText(drawing,"Dest area",Point2f(width-160,40),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0, 0, 0xff));
-    imwrite( "6draw.jpg", drawing );
+SHOW_DEST:
+    //measure and show
+   // Mat DestRGB;
+    cv::cvtColor(m_gray,DestRGB,COLOR_GRAY2RGB);
+    //char dist[40];
+    memset(dist,0,sizeof(dist));
+    //depth = 1540/32/1000000 *3 * g_CandidateArea.at(DestLine).captruePoint.y*1000; // 1540/m_osc*sampeRate/1000000*iRet;
+    //iRet = (int) round(depth);
+	depth = g_CandidateArea.at(DestLine).captruePoint.y;
+    sprintf(dist," %0.1f mm", depth);
+    //printf("dist:%s", dist);
+	putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,g_CandidateArea.at(DestLine).captruePoint.y/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
+	cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),g_CandidateArea.at(DestLine).captruePoint,Scalar(0,0,255),1);
+	imwrite( "Dest.jpg", DestRGB );
 	waitKey();
     return 0;
 }
