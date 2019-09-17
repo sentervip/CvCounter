@@ -8,7 +8,7 @@
 #include<algorithm> 
 #include <vector>
 
-#define  IMG_WIDTH      160
+#define  IMG_WIDTH      640
 #define  IMG_HEIGH      480
 
 #define  FL_MIN_LENGTH   (IMG_WIDTH*0.6)
@@ -20,7 +20,7 @@
 #define  MIN_Y           300
 #define  MIN_CANDIDAT_DIAMETER    200
 #define  MIN_CANDIDAT_AREA        700
-#define  MIN_DISTANCE_CLUSTER     6
+#define  MIN_DISTANCE_CLUSTER     25
 #define  MIN_IMG_Y                20 //MIN_DISTANCE_CLUSTER
 #define  CALC_WIDTH_UP            1
 #define  CALC_WIDTH_DOWN          2
@@ -136,6 +136,7 @@ int PointClustering(vector<Vec2f> _pts, vector<int> & out)
 					it = pts.erase(it);
 				}else{
 					it++;
+					break;
 				}
 			}
 		}
@@ -150,12 +151,14 @@ int LineMatch2Moment(vector<StrMonmentTag> MomentTag,  int lineY)
 	int index = 0;
 	int i=0;
 	int Min = 500;
+	int iAbs;
 
 	for(it=MomentTag.begin();it != MomentTag.end(); it++){
-		if(abs(it->mc.y - lineY) < Min 
+		iAbs = abs(it->mc.y - lineY);
+		if( iAbs < Min 
 			&& it->s > FL_MIN_AREA  
 			&& (it->d > FL_MIN_LENGTH) ){
-			Min = it->mc.y;
+			Min = iAbs;
 			index = i;
 		}
 		i++;
@@ -166,7 +169,7 @@ int CalcWidth(cv::Mat &bin,Point2i pt, int len, int UpOrDown)
 {
 	int aver =0;
 	int sum =0;
-	int width = 0;
+	int w = 0;
 
 		
 		if(UpOrDown == CALC_WIDTH_UP){
@@ -178,8 +181,8 @@ int CalcWidth(cv::Mat &bin,Point2i pt, int len, int UpOrDown)
 					}
 				aver = sum/len;
 				if( aver < 0.3 *0xff){ //有效黑色区域计算			
-					width++;
-				}else if(width == 0){ //在本白线内部
+					w++;
+				}else if(w == 0){ //在本白线内部
 					printf("waring, %s,innerLine %d",__FUNCTION__, pt.y);
 					continue;
 				}else if( aver > 0.7 *0xff){
@@ -195,8 +198,8 @@ int CalcWidth(cv::Mat &bin,Point2i pt, int len, int UpOrDown)
 				}
 				aver = sum/len;
 				if( aver < 0.3 *0xff){ //有效黑色区域计算			
-					width++;
-				}else if(width == 0){ //在本白线内部
+					w++;
+				}else if(w == 0){ //在本白线内部
 					printf("waring, %s,innerLine %d",__FUNCTION__, pt.y);
 					continue;
 				}else if( aver > 0.7 *0xff){
@@ -204,7 +207,7 @@ int CalcWidth(cv::Mat &bin,Point2i pt, int len, int UpOrDown)
 				}
 			}
 	}
-	return width;
+	return w;
 }
 int main()
 {
@@ -218,41 +221,43 @@ int main()
     vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
 	Mat DestRGB;
-    Mat m_origin = imread("D:/prj/z1/src/img/0904_ai/5.png", 1.0);
+    Mat m_origin = imread("D:/prj/z1/src/img/0916/1.png", 1.0);
+	Mat m_gray;
     
-    //s1 preprocess
-    GaussianBlur(m_origin, m_origin, Size(15, 15), 1.0);   
-    int width = m_origin.cols;
-    int height = m_origin.rows;
-    Mat m_gray = Mat::zeros(m_origin.size(),CV_8UC1);
-    for ( i = 0; i < height; i++)
+    //s1 preprocess     
+    int w = m_origin.cols;
+    int h = m_origin.rows;
+	if(m_origin.data == NULL){
+		printf("can not open 1.png\n");
+		waitKey(0);
+	}
+    Mat _m_gray = Mat::zeros(m_origin.size(),CV_8UC1);
+    for ( i = 0; i < h; i++)
     {
-        for ( j = 0; j < width; j++)
+        for ( j = 0; j < w; j++)
         {
             int pix = m_origin.at<Vec3b>(i, j)[0] + m_origin.at<Vec3b>(i, j)[2] - m_origin.at<Vec3b>(i, j)[1];
             if (pix > 255)
                 pix = 255;
             if (pix < 0)
                 pix = 0;
-            m_gray.at<uchar>(i, j) = (uchar)pix;
+            _m_gray.at<uchar>(i, j) = (uchar)pix;
         }
     }
-	imwrite("0gray.jpg", m_gray);
+	imwrite("0gray.jpg", _m_gray);
+	GaussianBlur(_m_gray, m_gray, Size(15, 15), 1.0);  
 
-    //morphology
-	
+    //morphology	
 	int g_nElementShape = MORPH_RECT;
 	Mat element = getStructuringElement(g_nElementShape, Size(5, 5) );
 	morphologyEx(m_gray, m_gray, CV_MOP_ERODE, element);  imwrite("1erode.jpg",m_gray);
 	element = getStructuringElement(g_nElementShape, Size(7, 7) );
 	morphologyEx(m_gray, m_gray, CV_MOP_DILATE, element);
-	
     imwrite("2dilate.jpg",m_gray);
-
     Mat m_bin;
     
     //Bin
-    threshold(m_gray, m_bin, 10, 255, CV_THRESH_OTSU);
+    threshold(m_gray, m_bin, 20, 255, CV_THRESH_OTSU);
     imwrite("3bin.jpg", m_bin);
 	
 	//lines
@@ -264,18 +269,18 @@ int main()
 	for(vector<Vec2f>::iterator it = lines.begin(); it != lines.end(); )
 	{
 		//float rho = lines[i][0], theta = lines[i][1];
-		float rho = it->val[0];
-		float theta = it->val[1];;
-		double a = cos(theta), b = sin(theta);
-		double x0 = a*rho, y0 = b*rho;
-		pt1.x = cvRound(x0 + width*(-b));
-		pt1.y = cvRound(y0 + width*(a));
-		pt2.x = cvRound(x0 - width*(-b));
-		pt2.y = cvRound(y0 - width*(a));
-		if(y0 < MIN_IMG_Y){
+//		float rho = it->val[0];
+//		float theta = it->val[1];;
+//		double a = cos(theta), b = sin(theta);
+//		double x0 = a*rho, y0 = b*rho;
+//		pt1.x = cvRound(x0 + w*(-b));
+//		pt1.y = cvRound(y0 + w*(a));
+//		pt2.x = cvRound(x0 - w*(-b));
+//		pt2.y = cvRound(y0 - w*(a));
+		if(it->val[0] < MIN_IMG_Y){
 			it = lines.erase(it);
 		}else{
-			line( m_line, pt1, pt2, Scalar(0,0,255), 1, CV_AA);
+			//line( m_line, pt1, pt2, Scalar(0,0,255), 1, CV_AA);
 			it++; 
 		}
 	}
@@ -289,10 +294,10 @@ int main()
 		depth = lines.at(0).val[0]; // 1540/m_osc*sampeRate/1000000*iRet;
 		sprintf(dist," %0.1f mm", depth);
 		putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,lines.at(0).val[0]/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
-		cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),Point2i(width/2,lines.at(0).val[0]),Scalar(0,0,255),1);
+		cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),Point2i(w/2,lines.at(0).val[0]),Scalar(0,0,255),1);
 		imwrite( "Dest.jpg", DestRGB );
 		//waitKey();
-		return 0;
+		return depth;
 	}
 	#else
         vector<Vec4i> lines;
@@ -303,8 +308,12 @@ int main()
                 Point(lines[i][2], lines[i][3]), Scalar(0,0,255), 0.3, CV_AA );
         }
     #endif
-	PointClustering(lines,g_lineY);
-	imwrite("4Line.jpg", m_line);
+		PointClustering(lines,g_lineY);
+		for(std::vector<int>::iterator it=g_lineY.begin(); it != g_lineY.end();){
+			line( m_line, Point(0,*it), Point(w, *it), Scalar(0,0,255), 1, CV_AA);
+			it++;
+		}
+		imwrite("4Line.jpg", m_line);
     
     //s2 get contour
 	Mat bMat = m_bin.clone();
@@ -366,15 +375,14 @@ int main()
 	}else;
     printf("tour over");
 
-	//s4 candidate,match to lines
+	//s4 candidate,match to lines, bug: 靠近前的多线数量 > 闭环区域数 导致后面漏线匹配情况
 	strAreaTag area;
 	i = 0;
+	std::sort(g_lineY.begin(),g_lineY.end(), SortCmpUp);
 	for( vector<int>::iterator it = g_lineY.begin(); it !=g_lineY.end(); i++){
 	   if(g_lineY.at(i) < MIN_IMG_Y){
-		   g_lineY.erase(it);
+		   it =g_lineY.erase(it);
 		   continue;
-	   }else{
-		   it++;
 	   }
 	   area.lineIndex = i;
        area.mcIndex = LineMatch2Moment(g_MonmentTag, g_lineY.at(i));
@@ -384,13 +392,18 @@ int main()
 	   area.boxUp = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_UP);
 	   //area.boxDown = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_DOWN);
 	   g_CandidateArea.push_back(area);
-	}
 
+	   // g_MonmentTag.size < g_lineY.size ? break
+	   if( i>= g_MonmentTag.size()){
+		   break;
+	   }
+	    it++;
+	}
 	vector<strAreaTag> _CandidateArea(g_CandidateArea);      
 	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortArea);
 	std::sort(_CandidateArea.begin(),_CandidateArea.end(),SortUp);
 	for( size_t i = 0; i < g_lineY.size(); i++){
-		g_CandidateArea.at(i).wws = g_CandidateArea.at(i).s/g_CandidateArea.at(0).s * 100; 
+		g_CandidateArea.at(i).wws = g_CandidateArea.at(i).s * 100/g_CandidateArea.at(0).s ; 
 		j = g_lineY.size();                                          
 		while(--j >= 0){
 			if(g_CandidateArea.at(i).lineIndex == _CandidateArea.at(j).lineIndex){
@@ -413,13 +426,13 @@ int main()
 SHOW_DEST:
     //measure and show
    // Mat DestRGB;
-    cv::cvtColor(m_gray,DestRGB,COLOR_GRAY2RGB);
+    cv::cvtColor(_m_gray,DestRGB,COLOR_GRAY2RGB);
     //char dist[40];
     memset(dist,0,sizeof(dist));
     //depth = 1540/32/1000000 *3 * g_CandidateArea.at(DestLine).captruePoint.y*1000; // 1540/m_osc*sampeRate/1000000*iRet;
     //iRet = (int) round(depth);
 	depth = g_CandidateArea.at(DestLine).captruePoint.y;
-    sprintf(dist," %0.1f mm", depth);
+    sprintf(dist," %0.0f mm", depth);
     //printf("dist:%s", dist);
 	putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,g_CandidateArea.at(DestLine).captruePoint.y/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
 	cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),g_CandidateArea.at(DestLine).captruePoint,Scalar(0,0,255),1);
