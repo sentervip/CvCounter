@@ -8,7 +8,7 @@
 #include<algorithm> 
 #include <vector>
 
-#define  IMG_WIDTH      640
+#define  IMG_WIDTH      320
 #define  IMG_HEIGH      480
 
 #define  FL_MIN_LENGTH   (IMG_WIDTH*0.6)
@@ -16,12 +16,11 @@
 #define  DELTA           (6)  // contour error   1/6 *w
 #define  DELTA_POINT     (10)  // point error  1/10 *w
 #define  SUM_CALC_POINT   (100)
-//#define  MIN_X           200
-#define  MIN_Y           300
+
 #define  MIN_CANDIDAT_DIAMETER    200
 #define  MIN_CANDIDAT_AREA        700
-#define  MIN_DISTANCE_CLUSTER     25
-#define  MIN_IMG_Y                20 //MIN_DISTANCE_CLUSTER
+#define  MIN_DISTANCE_CLUSTER     20
+#define  MIN_IMG_Y                16 //MIN_DISTANCE_CLUSTER
 #define  CALC_WIDTH_UP            1
 #define  CALC_WIDTH_DOWN          2
 
@@ -221,7 +220,9 @@ int main()
     vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
 	Mat DestRGB;
-    Mat m_origin = imread("D:/prj/z1/src/img/0916/1.png", 1.0);
+    Mat m_origin = imread("D:/prj/z1/src/img/0918_320/11.png", IMREAD_COLOR);
+	//Mat m_origin = imread("D:/prj/z1/src/CvCounter/win32/1.jpg", IMREAD_COLOR);
+
 	Mat m_gray;
     
     //s1 preprocess     
@@ -260,12 +261,12 @@ int main()
     threshold(m_gray, m_bin, 20, 255, CV_THRESH_OTSU);
     imwrite("3bin.jpg", m_bin);
 	
-	//lines
+	//Get lines
 	Mat m_line(m_bin.size(),CV_8UC1);
 
 	#if 1
 	vector<Vec2f> lines; 
-	HoughLines(m_bin, lines, 1, CV_PI/2, 100);
+	HoughLines(m_bin, lines, 1, CV_PI/2, IMG_WIDTH-20);
 	for(vector<Vec2f>::iterator it = lines.begin(); it != lines.end(); )
 	{
 		//float rho = lines[i][0], theta = lines[i][1];
@@ -286,17 +287,18 @@ int main()
 	}
 	if(lines.size() <1){
 		printf("invalid img\n");
+		waitKey(0);
 		return  EINVALID_ARG;
 	}else if(lines.size() == 1){
 		//measure and show		
 		cv::cvtColor(m_gray,DestRGB,COLOR_GRAY2RGB);
 		memset(dist,0,sizeof(dist));
 		depth = lines.at(0).val[0]; // 1540/m_osc*sampeRate/1000000*iRet;
-		sprintf(dist," %0.1f mm", depth);
+		sprintf(dist," %d mm", cvRound(depth));
 		putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,lines.at(0).val[0]/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
 		cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),Point2i(w/2,lines.at(0).val[0]),Scalar(0,0,255),1);
-		imwrite( "Dest.jpg", DestRGB );
-		//waitKey();
+		imwrite( "7Dest.jpg", DestRGB );
+		waitKey();
 		return depth;
 	}
 	#else
@@ -367,13 +369,13 @@ int main()
 		g_MonmentTag.push_back(mcTag);
 	}
 	imwrite("6mc.jpg", drawing);
-	if(g_MonmentTag.size() >2 ){
+	if(g_MonmentTag.size() >=2 ){
 	    std::sort(g_MonmentTag.begin(),g_MonmentTag.end(),SortCmp);
 	}else if(g_MonmentTag.size() <=1){
 	    printf("please touch up");
 	    return ECLOSED;
 	}else;
-    printf("tour over");
+   
 
 	//s4 candidate,match to lines, bug: 靠近前的多线数量 > 闭环区域数 导致后面漏线匹配情况
 	strAreaTag area;
@@ -384,6 +386,10 @@ int main()
 		   it =g_lineY.erase(it);
 		   continue;
 	   }
+	   // g_MonmentTag.size < g_lineY.size ? break
+	   if( i>= g_MonmentTag.size()){
+		   break;
+	   }
 	   area.lineIndex = i;
        area.mcIndex = LineMatch2Moment(g_MonmentTag, g_lineY.at(i));
 	   //area.mc = g_MonmentTag.at(area.mcIndex);
@@ -392,19 +398,14 @@ int main()
 	   area.boxUp = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_UP);
 	   //area.boxDown = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_DOWN);
 	   g_CandidateArea.push_back(area);
-
-	   // g_MonmentTag.size < g_lineY.size ? break
-	   if( i>= g_MonmentTag.size()){
-		   break;
-	   }
-	    it++;
+	   it++;
 	}
 	vector<strAreaTag> _CandidateArea(g_CandidateArea);      
 	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortArea);
 	std::sort(_CandidateArea.begin(),_CandidateArea.end(),SortUp);
-	for( size_t i = 0; i < g_lineY.size(); i++){
+	for( i = 0; i < g_CandidateArea.size(); i++){
 		g_CandidateArea.at(i).wws = g_CandidateArea.at(i).s * 100/g_CandidateArea.at(0).s ; 
-		j = g_lineY.size();                                          
+		j = g_CandidateArea.size();                                          
 		while(--j >= 0){
 			if(g_CandidateArea.at(i).lineIndex == _CandidateArea.at(j).lineIndex){
 				g_CandidateArea.at(i).bws = _CandidateArea.at(j).boxUp*100/_CandidateArea.at(0).boxUp;
@@ -414,16 +415,16 @@ int main()
 		g_CandidateArea.at(i).doc = g_CandidateArea.at(i).bws + g_CandidateArea.at(i).wws;
 	}
 	int DestLine = 0;
-	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortDoc);
-	if(g_CandidateArea.at(0).doc == g_CandidateArea.at(1).doc){
-		if(g_CandidateArea.at(0).wws > g_CandidateArea.at(1).wws){
-			DestLine = 0;
-		}else{
-			DestLine = 1;
+	if(g_CandidateArea.size() >=2 ){
+		std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortDoc);
+		if(g_CandidateArea.at(0).doc == g_CandidateArea.at(1).doc){
+			if(g_CandidateArea.at(0).wws >= g_CandidateArea.at(1).wws){
+				DestLine = 0;
+			}else{
+				DestLine = 1;
+			}
 		}
 	}
-
-SHOW_DEST:
     //measure and show
    // Mat DestRGB;
     cv::cvtColor(_m_gray,DestRGB,COLOR_GRAY2RGB);
@@ -432,11 +433,11 @@ SHOW_DEST:
     //depth = 1540/32/1000000 *3 * g_CandidateArea.at(DestLine).captruePoint.y*1000; // 1540/m_osc*sampeRate/1000000*iRet;
     //iRet = (int) round(depth);
 	depth = g_CandidateArea.at(DestLine).captruePoint.y;
-    sprintf(dist," %0.0f mm", depth);
+    sprintf(dist," %d mm", cvRound(depth));
     //printf("dist:%s", dist);
 	putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,g_CandidateArea.at(DestLine).captruePoint.y/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
 	cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),g_CandidateArea.at(DestLine).captruePoint,Scalar(0,0,255),1);
-	imwrite( "Dest.jpg", DestRGB );
+	imwrite( "7Dest.jpg", DestRGB );
 	waitKey();
     return 0;
 }
