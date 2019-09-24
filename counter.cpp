@@ -181,7 +181,7 @@ int CalcWidth(cv::Mat &bin,Point2i pt, int len, int UpOrDown)
 				aver = sum/len;
 				if( aver < 0.3 *0xff){ //有效黑色区域计算			
 					w++;
-				}else if(w == 0){ //在本白线内部
+				}else if(w == 0){ //在本白线内部，跳过
 					printf("waring, %s,innerLine %d",__FUNCTION__, pt.y);
 					continue;
 				}else if( aver > 0.7 *0xff){
@@ -220,7 +220,7 @@ int main()
     vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
 	Mat DestRGB;
-    Mat m_origin = imread("D:/prj/z1/src/img/0918_320/11.png", IMREAD_COLOR);
+    Mat m_origin = imread("D:/prj/z1/src/img/0918_320/17.png", IMREAD_COLOR);
 	//Mat m_origin = imread("D:/prj/z1/src/CvCounter/win32/1.jpg", IMREAD_COLOR);
 
 	Mat m_gray;
@@ -252,7 +252,7 @@ int main()
 	int g_nElementShape = MORPH_RECT;
 	Mat element = getStructuringElement(g_nElementShape, Size(5, 5) );
 	morphologyEx(m_gray, m_gray, CV_MOP_ERODE, element);  imwrite("1erode.jpg",m_gray);
-	element = getStructuringElement(g_nElementShape, Size(7, 7) );
+	element = getStructuringElement(g_nElementShape, Size(11, 11) );
 	morphologyEx(m_gray, m_gray, CV_MOP_DILATE, element);
     imwrite("2dilate.jpg",m_gray);
     Mat m_bin;
@@ -291,7 +291,7 @@ int main()
 		return  EINVALID_ARG;
 	}else if(lines.size() == 1){
 		//measure and show		
-		cv::cvtColor(m_gray,DestRGB,COLOR_GRAY2RGB);
+		cv::cvtColor(_m_gray,DestRGB,COLOR_GRAY2RGB);
 		memset(dist,0,sizeof(dist));
 		depth = lines.at(0).val[0]; // 1540/m_osc*sampeRate/1000000*iRet;
 		sprintf(dist," %d mm", cvRound(depth));
