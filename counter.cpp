@@ -20,9 +20,13 @@
 #define  MIN_CANDIDAT_DIAMETER    200
 #define  MIN_CANDIDAT_AREA        700
 #define  MIN_DISTANCE_CLUSTER     20
-#define  MIN_IMG_Y                16 //MIN_DISTANCE_CLUSTER
+#define  MIN_DEPTH                5  // mm
+#define  MIN_IMG_Y                20 //MIN_DISTANCE_CLUSTER
 #define  CALC_WIDTH_UP            1
 #define  CALC_WIDTH_DOWN          2
+#define  K3_GAUSSIAN_SIGAMA       70
+#define  K3_GAUSSIAN_C            70
+#define  K3_DEPTH_LOSS_COEFI      100 // depth loss coefficient of Gaussian curve
 
 vector<StrMonmentTag> g_MonmentTag;  //momentes struct
 vector<vector<Point> > g_Contours;
@@ -208,6 +212,19 @@ int CalcWidth(cv::Mat &bin,Point2i pt, int len, int UpOrDown)
 	}
 	return w;
 }
+/**
+gaussian function:
+y = e^((- (x-C)^2) / (2* (siga^2)) );
+*/
+float getGaussianData(int x)
+{
+    float  cofe1,cofe2,out,e=2.71828;
+
+	cofe1 = std::pow((float)x-K3_GAUSSIAN_SIGAMA,(float)2);
+	cofe2 = std::pow((float)K3_GAUSSIAN_C,(float)2) * 2;
+	out = std::pow((float)e,(float)(-cofe1/cofe2)) ;
+	return out;
+}
 int main()
 {
 	char dist[40];
@@ -220,7 +237,7 @@ int main()
     vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
 	Mat DestRGB;
-    Mat m_origin = imread("D:/prj/z1/src/img/0918_320/17.png", IMREAD_COLOR);
+    Mat m_origin = imread("D:/prj/z1/src/img/0918_320/2.png", IMREAD_COLOR);
 	//Mat m_origin = imread("D:/prj/z1/src/CvCounter/win32/1.jpg", IMREAD_COLOR);
 
 	Mat m_gray;
@@ -252,7 +269,7 @@ int main()
 	int g_nElementShape = MORPH_RECT;
 	Mat element = getStructuringElement(g_nElementShape, Size(5, 5) );
 	morphologyEx(m_gray, m_gray, CV_MOP_ERODE, element);  imwrite("1erode.jpg",m_gray);
-	element = getStructuringElement(g_nElementShape, Size(11, 11) );
+	element = getStructuringElement(g_nElementShape, Size(7, 7) );
 	morphologyEx(m_gray, m_gray, CV_MOP_DILATE, element);
     imwrite("2dilate.jpg",m_gray);
     Mat m_bin;
@@ -289,13 +306,18 @@ int main()
 		printf("invalid img\n");
 		waitKey(0);
 		return  EINVALID_ARG;
-	}else if(lines.size() == 1){
+	}else if(lines.size() == 1 ){
 		//measure and show		
 		cv::cvtColor(_m_gray,DestRGB,COLOR_GRAY2RGB);
 		memset(dist,0,sizeof(dist));
 		depth = lines.at(0).val[0]; // 1540/m_osc*sampeRate/1000000*iRet;
+		if(depth <= MIN_IMG_Y){
+			printf("depth < 4mm,again\n");
+			waitKey(3);
+			return  EINVALID_ARG;
+		}
 		sprintf(dist," %d mm", cvRound(depth));
-		putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,lines.at(0).val[0]/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
+		putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,lines.at(0).val[0]/2),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0,0,255));
 		cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),Point2i(w/2,lines.at(0).val[0]),Scalar(0,0,255),1);
 		imwrite( "7Dest.jpg", DestRGB );
 		waitKey();
@@ -396,6 +418,7 @@ int main()
 	   area.s = g_MonmentTag.at(area.mcIndex).s;
 	   area.captruePoint = Point2i(IMG_WIDTH/2, g_lineY.at(i));	   
 	   area.boxUp = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_UP);
+	   area.dls =  getGaussianData(area.captruePoint.y) * K3_DEPTH_LOSS_COEFI;
 	   //area.boxDown = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_DOWN);
 	   g_CandidateArea.push_back(area);
 	   it++;
@@ -412,7 +435,7 @@ int main()
 				break;
 			}
 		}
-		g_CandidateArea.at(i).doc = g_CandidateArea.at(i).bws + g_CandidateArea.at(i).wws;
+		g_CandidateArea.at(i).doc = g_CandidateArea.at(i).bws + g_CandidateArea.at(i).wws + g_CandidateArea.at(i).dls;
 	}
 	int DestLine = 0;
 	if(g_CandidateArea.size() >=2 ){
@@ -435,9 +458,13 @@ int main()
 	depth = g_CandidateArea.at(DestLine).captruePoint.y;
     sprintf(dist," %d mm", cvRound(depth));
     //printf("dist:%s", dist);
-	putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,g_CandidateArea.at(DestLine).captruePoint.y/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
+	putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,g_CandidateArea.at(DestLine).captruePoint.y/2),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0,0,255));
 	cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),g_CandidateArea.at(DestLine).captruePoint,Scalar(0,0,255),1);
 	imwrite( "7Dest.jpg", DestRGB );
+	if(depth < MIN_IMG_Y){
+		printf("depth < 5 mm,please again");
+		return EINVALID_ARG;
+	}
 	waitKey();
     return 0;
 }

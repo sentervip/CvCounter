@@ -8,6 +8,7 @@
 #include "opencv2/imgproc/imgproc.hpp"
 using namespace std;
 using namespace cv;
+
 #define EINVALID_ARG  (-1)
 #define ECLOSED    (-2)
 //#define MAX(x,y)   (x>y?x:y)
@@ -32,6 +33,7 @@ typedef struct StrAreaTAG{
 	//uint32_t d; //diameter of contour
 	uint32_t wws; // white width of score
 	uint32_t bws; // black width of score
+	float dls; // depth loss of score
 	uint32_t doc; // degree of confidence
 	Point    captruePoint; 
 	int32_t  boxUp;
