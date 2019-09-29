@@ -237,7 +237,7 @@ int main()
     vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
 	Mat DestRGB;
-    Mat m_origin = imread("D:/prj/z1/src/img/0918_320/2.png", IMREAD_COLOR);
+    Mat m_origin = imread("D:/prj/z1/src/img/0918_320/18.png", IMREAD_COLOR);
 	//Mat m_origin = imread("D:/prj/z1/src/CvCounter/win32/1.jpg", IMREAD_COLOR);
 
 	Mat m_gray;
