@@ -20,7 +20,7 @@
 #define  MIN_CANDIDAT_DIAMETER    200
 #define  MIN_CANDIDAT_AREA        700
 #define  MIN_DISTANCE_CLUSTER     20
-#define  MIN_DEPTH                5  // mm
+#define  MIN_DEPTH                6  // mm
 #define  MIN_IMG_Y                20 //MIN_DISTANCE_CLUSTER
 #define  CALC_WIDTH_UP            1
 #define  CALC_WIDTH_DOWN          2
@@ -118,7 +118,7 @@ int PointClustering(vector<Vec2f> _pts, vector<int> & out)
 	//get pts and sort
 	if(_pts.size() <=1){
 		printf("%s, size：%d\n",__FUNCTION__, _pts.size());
-		return 0;
+		return -1;
 	}
 	for(i=0;i< _pts.size(); i++){
 		pts.push_back(cvRound(_pts[i][0]) );
@@ -237,7 +237,7 @@ int main()
     vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
 	Mat DestRGB;
-    Mat m_origin = imread("D:/prj/z1/src/img/0918_320/18.png", IMREAD_COLOR);
+    Mat m_origin = imread("D:/prj/z1/src/img/0918_320/1.png", IMREAD_COLOR);
 	//Mat m_origin = imread("D:/prj/z1/src/CvCounter/win32/1.jpg", IMREAD_COLOR);
 
 	Mat m_gray;
@@ -247,7 +247,9 @@ int main()
     int h = m_origin.rows;
 	if(m_origin.data == NULL){
 		printf("can not open 1.png\n");
-		waitKey(0);
+		//waitKey(0);
+		std::cin >> depth;
+		return EINVALID_ARG;
 	}
     Mat _m_gray = Mat::zeros(m_origin.size(),CV_8UC1);
     for ( i = 0; i < h; i++)
@@ -263,12 +265,18 @@ int main()
         }
     }
 	imwrite("0gray.jpg", _m_gray);
-	GaussianBlur(_m_gray, m_gray, Size(15, 15), 1.0);  
+	//GaussianBlur(_m_gray, m_gray, Size(5, 5), 1.0);  
+
+	Mat m_grayEnhance;
+	cv::equalizeHist(_m_gray, m_grayEnhance);
+	imwrite("1.1m_grayEnhance.jpg",m_grayEnhance); 
+	GaussianBlur(m_grayEnhance, m_grayEnhance, Size(5, 5), 1.0);  
 
     //morphology	
 	int g_nElementShape = MORPH_RECT;
 	Mat element = getStructuringElement(g_nElementShape, Size(5, 5) );
-	morphologyEx(m_gray, m_gray, CV_MOP_ERODE, element);  imwrite("1erode.jpg",m_gray);
+	morphologyEx(m_grayEnhance, m_gray, CV_MOP_ERODE, element);  
+	imwrite("1erode.jpg",m_gray);
 	element = getStructuringElement(g_nElementShape, Size(7, 7) );
 	morphologyEx(m_gray, m_gray, CV_MOP_DILATE, element);
     imwrite("2dilate.jpg",m_gray);
@@ -283,7 +291,7 @@ int main()
 
 	#if 1
 	vector<Vec2f> lines; 
-	HoughLines(m_bin, lines, 1, CV_PI/2, IMG_WIDTH-20);
+	HoughLines(m_bin, lines, 1, CV_PI/2, IMG_WIDTH-40);
 	for(vector<Vec2f>::iterator it = lines.begin(); it != lines.end(); )
 	{
 		//float rho = lines[i][0], theta = lines[i][1];
@@ -304,24 +312,30 @@ int main()
 	}
 	if(lines.size() <1){
 		printf("invalid img\n");
-		waitKey(0);
-		return  EINVALID_ARG;
+		std::cin >> depth;
+		return  ENULL_WAVE;
 	}else if(lines.size() == 1 ){
 		//measure and show		
 		cv::cvtColor(_m_gray,DestRGB,COLOR_GRAY2RGB);
 		memset(dist,0,sizeof(dist));
 		depth = lines.at(0).val[0]; // 1540/m_osc*sampeRate/1000000*iRet;
 		if(depth <= MIN_IMG_Y){
-			printf("depth < 4mm,again\n");
-			waitKey(3);
-			return  EINVALID_ARG;
+			printf("depth < 6mm,again\n");
+			//waitKey(0);
+			std::cin >> depth;
+			return  ELOW_WAVE;
 		}
 		sprintf(dist," %d mm", cvRound(depth));
 		putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,lines.at(0).val[0]/2),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0,0,255));
 		cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),Point2i(w/2,lines.at(0).val[0]),Scalar(0,0,255),1);
 		imwrite( "7Dest.jpg", DestRGB );
-		waitKey();
+		//waitKey(0);
+		std::cin >> depth;
 		return depth;
+	}else if(lines.size() >4){
+        printf("lines.size=%d,EOVER_PRESSED_WAVE,exit\n", lines.size());
+		std::cin >> depth;
+        return  EOVER_PRESSED_WAVE;
 	}
 	#else
         vector<Vec4i> lines;
@@ -332,7 +346,14 @@ int main()
                 Point(lines[i][2], lines[i][3]), Scalar(0,0,255), 0.3, CV_AA );
         }
     #endif
-		PointClustering(lines,g_lineY);
+		iRet = PointClustering(lines,g_lineY);
+        if(iRet < 0){
+	        printf("cluster failed,exit");
+			//waitKey(0);
+			std::cin >> depth;
+	        return ELOW_WAVE;
+		}
+	
 		for(std::vector<int>::iterator it=g_lineY.begin(); it != g_lineY.end();){
 			line( m_line, Point(0,*it), Point(w, *it), Scalar(0,0,255), 1, CV_AA);
 			it++;
@@ -345,7 +366,7 @@ int main()
     findContours(bMat, g_Contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
     Mat markers = Mat::zeros(bMat.size(), CV_32SC1);
     
-    for ( i = 0; i < g_Contours.size(); i++)
+    for( i = 0; i < g_Contours.size(); i++)
         drawContours(markers, g_Contours, static_cast<int>(i), Scalar::all(static_cast<int>(i)+1), -1);
     
     circle(markers, Point(5, 5), 3, CV_RGB(255, 255, 255), -1);
@@ -395,7 +416,8 @@ int main()
 	    std::sort(g_MonmentTag.begin(),g_MonmentTag.end(),SortCmp);
 	}else if(g_MonmentTag.size() <=1){
 	    printf("please touch up");
-	    return ECLOSED;
+		std::cin >> depth;
+	    return ELOW_WAVE;
 	}else;
    
 
@@ -462,9 +484,10 @@ int main()
 	cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),g_CandidateArea.at(DestLine).captruePoint,Scalar(0,0,255),1);
 	imwrite( "7Dest.jpg", DestRGB );
 	if(depth < MIN_IMG_Y){
-		printf("depth < 5 mm,please again");
+		printf("depth < 6 mm,please again");
 		return EINVALID_ARG;
 	}
-	waitKey();
+	//waitKey(0);
+	std::cin >> depth;
     return 0;
 }

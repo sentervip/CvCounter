@@ -9,10 +9,16 @@
 using namespace std;
 using namespace cv;
 
-#define EINVALID_ARG  (-1)
-#define ECLOSED    (-2)
 //#define MAX(x,y)   (x>y?x:y)
 //#define MIN(x,y)   (x>y?y:x)
+#define EINVALID_ARG  (-1)
+#define ECLOSED    (-2)
+//picture detect
+#define EINVALID_ARG     (-1)
+#define ENULL_WAVE       (-2)
+#define ELOW_WAVE        (-3)
+#define EOVER_PRESSED_WAVE    (-4)
+
 typedef struct StrMonmentTAG{
 Point2f * pMc;
 Point2f mc;
