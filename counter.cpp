@@ -20,7 +20,11 @@
 #define  MIN_CANDIDAT_DIAMETER    200
 #define  MIN_CANDIDAT_AREA        700
 #define  MIN_DISTANCE_CLUSTER     20
-#define  MIN_DEPTH                6  // mm
+#define  PART_WAIST_MIN_DEPTH     6  // mm
+#define  PART_FACE_MIN_DEPTH      4 // mm
+#define  PART_ARM_MIN_DEPTH       3  // mm
+#define  PART_THIGH_MIN_DEPTH     3
+#define  PART_BELLY_MIN_DEPTH     6
 #define  MIN_IMG_Y                20 //MIN_DISTANCE_CLUSTER
 #define  CALC_WIDTH_UP            1
 #define  CALC_WIDTH_DOWN          2
@@ -32,6 +36,7 @@ vector<StrMonmentTag> g_MonmentTag;  //momentes struct
 vector<vector<Point> > g_Contours;
 vector<strAreaTag> g_AllArea,g_CandidateArea; //all area and area of lines
 vector<strAreaTag> * pAreaTag = &g_AllArea;
+int part = PART_BELLY;
 
 
 string int2str(int index,int n1=0,int n2=0) {
@@ -51,7 +56,19 @@ string int2str(int index,int n1=0,int n2=0) {
     
     return s;
 }
-int sort_point(vector<Point2f> mc, int * valid, Mat &drawing)
+static int GetMinDepth(int part)
+{
+    switch(part){
+        case PART_FACE: return PART_FACE_MIN_DEPTH;
+        case PART_ARM: return PART_ARM_MIN_DEPTH;
+        case PART_WAIST: case PART_BELLY: 
+			 return PART_WAIST_MIN_DEPTH;
+		case PART_THIGH:  return PART_THIGH_MIN_DEPTH;
+        default: printf("%s,invalid part：%d",__FUNCTION__,part);
+                 return PART_FACE_MIN_DEPTH;
+    }
+}
+int SortPoint(vector<Point2f> mc, int * valid, Mat &drawing)
 {
     if(mc.size() <2 )
         return -1;
@@ -237,7 +254,7 @@ int main()
     vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
 	Mat DestRGB;
-    Mat m_origin = imread("D:/prj/z1/src/img/0918_320/1.png", IMREAD_COLOR);
+    Mat m_origin = imread("D:/prj/z1/src/img/191204/4Y.png", IMREAD_COLOR);
 	//Mat m_origin = imread("D:/prj/z1/src/CvCounter/win32/1.jpg", IMREAD_COLOR);
 
 	Mat m_gray;
@@ -264,25 +281,28 @@ int main()
             _m_gray.at<uchar>(i, j) = (uchar)pix;
         }
     }
-	imwrite("0gray.jpg", _m_gray);
-	//GaussianBlur(_m_gray, m_gray, Size(5, 5), 1.0);  
+	imwrite("0gray.jpg", _m_gray);	 
+	if(part == PART_BELLY){
+		GaussianBlur(_m_gray, m_gray, Size(5, 5), 1.0); 
+	}else{
+		Mat m_grayEnhance;
+		cv::equalizeHist(_m_gray, m_grayEnhance);
+		imwrite("1.1m_grayEnhance.jpg",m_grayEnhance); 
+		GaussianBlur(m_grayEnhance, m_grayEnhance, Size(5, 5), 1.0);  
 
-	Mat m_grayEnhance;
-	cv::equalizeHist(_m_gray, m_grayEnhance);
-	imwrite("1.1m_grayEnhance.jpg",m_grayEnhance); 
-	GaussianBlur(m_grayEnhance, m_grayEnhance, Size(5, 5), 1.0);  
-
-    //morphology	
-	int g_nElementShape = MORPH_RECT;
-	Mat element = getStructuringElement(g_nElementShape, Size(5, 5) );
-	morphologyEx(m_grayEnhance, m_gray, CV_MOP_ERODE, element);  
-	imwrite("1erode.jpg",m_gray);
-	element = getStructuringElement(g_nElementShape, Size(7, 7) );
-	morphologyEx(m_gray, m_gray, CV_MOP_DILATE, element);
-    imwrite("2dilate.jpg",m_gray);
-    Mat m_bin;
+		//morphology	
+		int g_nElementShape = MORPH_RECT;
+		Mat element = getStructuringElement(g_nElementShape, Size(5, 5) );
+		morphologyEx(m_grayEnhance, m_gray, CV_MOP_ERODE, element);  
+		imwrite("1erode.jpg",m_gray);
+		element = getStructuringElement(g_nElementShape, Size(7, 7) );
+		morphologyEx(m_gray, m_gray, CV_MOP_DILATE, element);
+		imwrite("2dilate.jpg",m_gray);
+	}
+    
     
     //Bin
+	Mat m_bin;
     threshold(m_gray, m_bin, 20, 255, CV_THRESH_OTSU);
     imwrite("3bin.jpg", m_bin);
 	
@@ -294,15 +314,6 @@ int main()
 	HoughLines(m_bin, lines, 1, CV_PI/2, IMG_WIDTH-40);
 	for(vector<Vec2f>::iterator it = lines.begin(); it != lines.end(); )
 	{
-		//float rho = lines[i][0], theta = lines[i][1];
-//		float rho = it->val[0];
-//		float theta = it->val[1];;
-//		double a = cos(theta), b = sin(theta);
-//		double x0 = a*rho, y0 = b*rho;
-//		pt1.x = cvRound(x0 + w*(-b));
-//		pt1.y = cvRound(y0 + w*(a));
-//		pt2.x = cvRound(x0 - w*(-b));
-//		pt2.y = cvRound(y0 - w*(a));
 		if(it->val[0] < MIN_IMG_Y){
 			it = lines.erase(it);
 		}else{
@@ -314,12 +325,12 @@ int main()
 		printf("invalid img\n");
 		std::cin >> depth;
 		return  ENULL_WAVE;
-	}else if(lines.size() == 1 ){
+	}else if(lines.size() == 1 || part == PART_FACE || part == PART_ARM || part==PART_THIGH){
 		//measure and show		
 		cv::cvtColor(_m_gray,DestRGB,COLOR_GRAY2RGB);
 		memset(dist,0,sizeof(dist));
 		depth = lines.at(0).val[0]; // 1540/m_osc*sampeRate/1000000*iRet;
-		if(depth <= MIN_IMG_Y){
+		if(depth < GetMinDepth(part)){
 			printf("depth < 6mm,again\n");
 			//waitKey(0);
 			std::cin >> depth;
@@ -329,10 +340,10 @@ int main()
 		putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,lines.at(0).val[0]/2),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0,0,255));
 		cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),Point2i(w/2,lines.at(0).val[0]),Scalar(0,0,255),1);
 		imwrite( "7Dest.jpg", DestRGB );
-		//waitKey(0);
+		printf("calc Ok,only one");
 		std::cin >> depth;
 		return depth;
-	}else if(lines.size() >4){
+	}else if(lines.size() > 8 && part == PART_WAIST){
         printf("lines.size=%d,EOVER_PRESSED_WAVE,exit\n", lines.size());
 		std::cin >> depth;
         return  EOVER_PRESSED_WAVE;
@@ -448,7 +459,7 @@ int main()
 	vector<strAreaTag> _CandidateArea(g_CandidateArea);      
 	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortArea);
 	std::sort(_CandidateArea.begin(),_CandidateArea.end(),SortUp);
-	for( i = 0; i < g_CandidateArea.size(); i++){
+	for( i = 0; i < g_CandidateArea.size(); i++){ 
 		g_CandidateArea.at(i).wws = g_CandidateArea.at(i).s * 100/g_CandidateArea.at(0).s ; 
 		j = g_CandidateArea.size();                                          
 		while(--j >= 0){
@@ -483,11 +494,12 @@ int main()
 	putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,g_CandidateArea.at(DestLine).captruePoint.y/2),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0,0,255));
 	cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),g_CandidateArea.at(DestLine).captruePoint,Scalar(0,0,255),1);
 	imwrite( "7Dest.jpg", DestRGB );
-	if(depth < MIN_IMG_Y){
+	if(depth < GetMinDepth(part)){
 		printf("depth < 6 mm,please again");
 		return EINVALID_ARG;
 	}
+	printf("over,success\n");
 	//waitKey(0);
-	std::cin >> depth;
+	//std::cin >> depth;
     return 0;
 }

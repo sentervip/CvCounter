@@ -11,14 +11,18 @@ using namespace cv;
 
 //#define MAX(x,y)   (x>y?x:y)
 //#define MIN(x,y)   (x>y?y:x)
-#define EINVALID_ARG  (-1)
-#define ECLOSED    (-2)
 //picture detect
 #define EINVALID_ARG     (-1)
 #define ENULL_WAVE       (-2)
 #define ELOW_WAVE        (-3)
 #define EOVER_PRESSED_WAVE    (-4)
-
+enum BODY_PART{
+	PART_WAIST = 0,
+	PART_FACE,
+	PART_ARM,
+	PART_THIGH,
+	PART_BELLY,
+};
 typedef struct StrMonmentTAG{
 Point2f * pMc;
 Point2f mc;
