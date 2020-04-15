@@ -34,7 +34,6 @@ Point2f mc;
 int contourIndex;
 int d;
 int s;
-vector<Point> PtsEdges;
 }StrMonmentTag;
 typedef struct StrCandicateTAG{
 cv::Point2i  pt;
