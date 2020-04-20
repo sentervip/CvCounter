@@ -380,7 +380,7 @@ int main()
 	vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
 	Mat DestRGB;
-	Mat m_origin = imread("D:/prj/z1/src/img/slider/y2.png", IMREAD_COLOR);
+	Mat m_origin = imread("D:/prj/z1/src/img/slider/y37.jpg", IMREAD_COLOR);
 	Mat m_gray;  
     std::vector<cv::Point> in_point, in;
     Point ipt;
@@ -389,7 +389,7 @@ int main()
 	int w = m_origin.cols;
 	int h = m_origin.rows;
 	if(m_origin.data == NULL){
-		printf("can not open 1.png\n");
+		printf("can not open file\n");
 		//waitKey(0);
 		std::cin >> depth;
 		return EINVALID_ARG;
@@ -431,7 +431,7 @@ int main()
 
 	//s3 get center monments
 	vector<Moments> mu(g_Contours.size() );
-	for( i = 0; i < g_Contours.size(); i++ )
+	for( i = 0; i < g_Contours.size(); i++)
 	{ 
 		mu[i] = moments( g_Contours[i], false ); 
 	}
@@ -452,6 +452,8 @@ int main()
 	g_MonmentTag.clear();
     for( i = 0; i< g_Contours.size(); i++ )
     {	
+		//memset(&mcTag,0,sizeof(StrMonmentTag));
+		mcTag.PtsEdges.clear();
         //d =(long int) arcLength( g_Contours[i], true );
         s =(int) contourArea(g_Contours[i]);
 		//mcTag.d = d;
@@ -468,7 +470,7 @@ int main()
 		drawContours( drawing, g_Contours, i, color, 2, 8, g_vHierarchy, 0, Point() );     
 		circle( drawing, mc[i], 3, Scalar(0,0,255), -1, 0.1f, 0 );
 		putText(drawing,int2str(i,mcTag.s,mcTag.d),mc[i],CV_FONT_HERSHEY_DUPLEX,0.3f,Scalar(255,255,255));
-		putText(drawing,int2str(mc[i].x, mc[i].y),Point2i(mc[i].x-40,mc[i].y+10),CV_FONT_HERSHEY_DUPLEX,  0.3f,Scalar(0,0,255));		
+		putText(drawing,int2str(mc[i].x, mc[i].y),Point2i(mc[i].x-20,mc[i].y+10),CV_FONT_HERSHEY_DUPLEX,  0.3f,Scalar(0,0,255));		
 		g_MonmentTag.push_back(mcTag);
 	}
 	imwrite("6mc.jpg", drawing);
@@ -476,7 +478,6 @@ int main()
 	//策略选取区域
 	if(g_MonmentTag.size() >=2 ){
 		std::sort(g_MonmentTag.begin(),g_MonmentTag.end(),SortAo);// x ascending order
-
 	    if(g_MonmentTag.at(0).mc.y > (IMG_HEIGH/2) && g_MonmentTag.at(1).mc.y > (IMG_HEIGH/5) ){
            in_point = g_Contours[g_MonmentTag.at(1).contourIndex];
 	    }
