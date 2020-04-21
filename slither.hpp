@@ -29,11 +29,13 @@ enum BODY_PART{
     PART_BELLY,
 };
 typedef struct StrMonmentTAG{
-Point2f * pMc;
-Point2f mc;
-int contourIndex;
 int d;
 int s;
+int contourIndex;
+unsigned int AveYAxis; 
+Point2f * pMc;
+Point2f mc;
+vector<Point> PtsEdges;
 }StrMonmentTag;
 typedef struct StrCandicateTAG{
 cv::Point2i  pt;
@@ -41,29 +43,9 @@ float MeanValue;
 float StandDev;
 }StrCandicateTag;
 typedef struct StrAreaTAG{
-	uint32_t lineIndex; //line index
-	uint32_t mcIndex; //monmet index;
-	//struct StrMonmentTAG  mc;
-	uint32_t s; //surface of contour
-	//uint32_t d; //diameter of contour
-	uint32_t wws; // white width of score
-	uint32_t bws; // black width of score
+	uint32_t McIndex; //monmet index;
 	float dls; // depth loss of score
-	uint32_t doc; // degree of confidence
-	Point    captruePoint; 
-	int32_t  boxUp;
-	int32_t  boxDown;
-	float    Depth;
-/*
-    uint32_t x1;
-    uint32_t x2; 
-    uint32_t y1;
-    uint32_t y2;
-	uint32_t      AverCenterIndex; //center point of cadicate points       
-	int32_t      AverCount;
-	uint32_t     AverValue;
-	cv::Point  AverPoint[100];  // aver point for calc
-	*/
+	float doc; // degree of confidence
 }strAreaTag;
 
 

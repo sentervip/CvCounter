@@ -1,4 +1,4 @@
-#include "counter.hpp"
+#include "slither.hpp"
 #include "fstream"
 #include <iostream>
 #include <string>
@@ -34,6 +34,7 @@ using namespace std;
 #define  K3_GAUSSIAN_SIGAMA       70
 #define  K3_GAUSSIAN_C            70
 #define  K3_DEPTH_LOSS_COEFI      100 // depth loss coefficient of Gaussian curve
+#define  SURFACE_REFERENCE        1200  //参考满分面积值
 
 vector<StrMonmentTag> g_MonmentTag;  //momentes struct
 vector<vector<Point> > g_Contours;
@@ -105,12 +106,27 @@ int SortPoint(vector<Point2f> mc, int * valid, Mat &drawing)
 void AreaGetMax(strAreaTag * area, int w, int h)
 {    
 }
-int SortPointUp(Point a1, Point a2)
+//sort: descending order for x axis
+int SortPointXAo(Point a1, Point a2)
 {
 	return a1.x < a2.x;
 }
-//sort: ascending order
-int SortAo(StrMonmentTag a1, StrMonmentTag a2)
+//sort: descending order for y axis
+int SortPointYAo(Point a1, Point a2)
+{
+	return a1.y < a2.y;
+}
+//sort: ascending order length of monmentTag
+int SortAoLen(StrMonmentTag a1, StrMonmentTag a2)
+{
+	return a1.d > a2.d;
+}
+int SortAoYaxis(StrMonmentTag a1, StrMonmentTag a2)
+{
+	return a1.mc.y > a2.mc.y;
+}
+//sort: ascending order square
+int SortAoSqa(StrMonmentTag a1, StrMonmentTag a2)
 {
 	return a1.s > a2.s;
 }
@@ -120,7 +136,7 @@ int SortCmpUp(int a1, int a2)
 }
 int SortArea(strAreaTag a1, strAreaTag a2)
 {
-	return g_MonmentTag.at(a1.mcIndex).s > g_MonmentTag.at(a2.mcIndex).s;
+	return g_MonmentTag.at(a1.McIndex).s > g_MonmentTag.at(a2.McIndex).s;
 }
 int SortDoc(strAreaTag a1, strAreaTag a2)
 {
@@ -128,7 +144,7 @@ int SortDoc(strAreaTag a1, strAreaTag a2)
 }
 int SortUp(strAreaTag a1, strAreaTag a2)
 {
-	return a1.boxUp > a2.boxUp;
+	return 0;//a1.boxUp > a2.boxUp;
 }
 
 int GetDistance(CvPoint pointO,CvPoint pointA )  
@@ -353,7 +369,7 @@ void GetPtsEdges(vector<Point>& SrcContour, vector<Point>& DstEdges)
 	int i =0;
 	int j=0;
 
-	std::sort(SrcContour.begin(),SrcContour.end(),SortPointUp);
+	std::sort(SrcContour.begin(),SrcContour.end(),SortPointXAo);
 	DstEdges.push_back(SrcContour.at(0));
 	for( i=0; i < SrcContour.size();i++){		
 		if(SrcContour.at(i).x > DstEdges.at(j).x){
@@ -364,6 +380,32 @@ void GetPtsEdges(vector<Point>& SrcContour, vector<Point>& DstEdges)
 				DstEdges.at(j).y = SrcContour.at(i).y;
 			}
 		}else ;
+	}
+}
+void GetEdgesYInfo(StrMonmentTag &mc, vector<Point>& DstEdges)
+{
+	int i =0;
+	int j=0;
+	int sum = 0;
+	int size = DstEdges.size();
+
+	if( &mc == NULL ||  size <= 5  ){
+		printf("%s invalid arg,exit", __FUNCTION__);
+		return;
+	}
+	std::sort(DstEdges.begin(),DstEdges.end(),SortPointYAo);
+	for( i=0; i < size;i++){		
+		if( i > (0.2*size) && i < (0.8*size) ){
+			sum += DstEdges.at(i).y;
+			j++;
+		}
+	}
+
+	//get average depth 
+	if(j > 0){
+		mc.AveYAxis = sum/j;
+	}else{
+		mc.AveYAxis = 0;
 	}
 }
 
@@ -380,7 +422,7 @@ int main()
 	vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
 	Mat DestRGB;
-	Mat m_origin = imread("D:/prj/z1/src/img/slider/y37.jpg", IMREAD_COLOR);
+	Mat m_origin = imread("D:/prj/z1/src/img/slider/f5.png", IMREAD_COLOR);
 	Mat m_gray;  
     std::vector<cv::Point> in_point, in;
     Point ipt;
@@ -390,8 +432,8 @@ int main()
 	int h = m_origin.rows;
 	if(m_origin.data == NULL){
 		printf("can not open file\n");
-		//waitKey(0);
-		std::cin >> depth;
+		waitKey(0);
+		getchar();
 		return EINVALID_ARG;
 	}
 	Mat _m_gray = Mat::zeros(m_origin.size(),CV_8UC1);
@@ -443,10 +485,9 @@ int main()
 		mc[i] = Point2i( static_cast<float>(mu[i].m10/mu[i].m00), static_cast<float>(mu[i].m01/mu[i].m00 )) ;
 	}
 
-	// drawing contour and calc args of mc
+	// s4  update args of mc and drawing contour 
 	Mat drawing = Mat::zeros( g_cannyMat_output.size(), CV_8UC3 );
 	Scalar color = CV_RGB(0,255,0);
-	//strAreaTag  area;
 	StrMonmentTag mcTag;
 	int d,s;
 	g_MonmentTag.clear();
@@ -454,19 +495,21 @@ int main()
     {	
 		//memset(&mcTag,0,sizeof(StrMonmentTag));
 		mcTag.PtsEdges.clear();
-        //d =(long int) arcLength( g_Contours[i], true );
+        d =(long int) arcLength( g_Contours[i], true );
         s =(int) contourArea(g_Contours[i]);
-		//mcTag.d = d;
-		mcTag.s = s;
+		mcTag.s = s;		
+        if(d < FL_MIN_LENGTH || mcTag.s < FL_MIN_AREA || mc.at(i).y <= (MIN_IMG_Y+15) ){
+            continue;
+        }
 		mcTag.mc = mc.at(i);
 		mcTag.contourIndex = i;
 		GetPtsEdges(g_Contours[mcTag.contourIndex],mcTag.PtsEdges);
-		mcTag.d = mcTag.PtsEdges.at(mcTag.PtsEdges.size()-1).x - mcTag.PtsEdges.at(0).x;
-        if(mcTag.d < FL_MIN_LENGTH || mcTag.s < FL_MIN_AREA || mc.at(i).y <= (MIN_IMG_Y+15) ){
-            continue;
-        }
-        printf("[%d],mc.x=%f,mc.y=%f, s:%d ,d1:%d,d2=%d\n", i,mc[i].x,mc[i].y, (int)mcTag.s, (int)mcTag.d, 
-			    mcTag.PtsEdges.at(mcTag.PtsEdges.size()-1).x - mcTag.PtsEdges.at(0).x);
+		mcTag.d = abs(mcTag.PtsEdges.at(mcTag.PtsEdges.size()-1).x - mcTag.PtsEdges.at(0).x );
+		if(mcTag.d < IMG_WIDTH/2){
+	        continue;
+		}
+		GetEdgesYInfo(mcTag, mcTag.PtsEdges);
+        printf("[%d],mc.x=%f,mc.y=%f, s:%d ,d:%d,y=%d\n", i,mc[i].x,mc[i].y, (int)mcTag.s, (int)mcTag.d, mcTag.AveYAxis);
 		drawContours( drawing, g_Contours, i, color, 2, 8, g_vHierarchy, 0, Point() );     
 		circle( drawing, mc[i], 3, Scalar(0,0,255), -1, 0.1f, 0 );
 		putText(drawing,int2str(i,mcTag.s,mcTag.d),mc[i],CV_FONT_HERSHEY_DUPLEX,0.3f,Scalar(255,255,255));
@@ -475,23 +518,48 @@ int main()
 	}
 	imwrite("6mc.jpg", drawing);
 
-	//策略选取区域
-	if(g_MonmentTag.size() >=2 ){
-		std::sort(g_MonmentTag.begin(),g_MonmentTag.end(),SortAo);// x ascending order
-	    if(g_MonmentTag.at(0).mc.y > (IMG_HEIGH/2) && g_MonmentTag.at(1).mc.y > (IMG_HEIGH/5) ){
-           in_point = g_Contours[g_MonmentTag.at(1).contourIndex];
-	    }
-        in_point = g_Contours[g_MonmentTag.at(0).contourIndex];
-	}else if(g_MonmentTag.size() <1){
-		printf("please touch up");
-		//std::cin >> depth;
-		return ELOW_WAVE;
-	}else{
-        in_point = g_Contours[g_MonmentTag.at(0).contourIndex];
+	//s5 get DOC
+	i = 0;
+	strAreaTag area;
+	float ScoreS,ScoreLen;
+	std::vector<StrMonmentTag> StrMcSortAoLen(g_MonmentTag.size());
+	std::copy(g_MonmentTag.begin(),g_MonmentTag.end(),StrMcSortAoLen.begin());
+	std::sort(StrMcSortAoLen.begin(),StrMcSortAoLen.end(),SortAoLen);
+	for( vector<StrMonmentTag>::iterator it = StrMcSortAoLen.begin(); it != StrMcSortAoLen.end(); i++){
+       area.McIndex = i;
+	   if(StrMcSortAoLen.at(i).AveYAxis > 80){
+	       area.dls = std::exp(-0.007 * StrMcSortAoLen.at(i).AveYAxis) * 159.39; // Y = 159.39e^(-0.007x)
+	   }else{
+		   area.dls = std::exp(0.0102 * StrMcSortAoLen.at(i).AveYAxis) * 44.15; // Y = 44.15^(0.0102x)
+	   }
+	   ScoreLen = StrMcSortAoLen.at(i).d *100/IMG_WIDTH; // score of area's length
+	   ScoreS  = (StrMcSortAoLen.at(i).s / SURFACE_REFERENCE* 100);
+	   ScoreS > 100? ScoreS=100:ScoreS;
+
+	   //len/surface/y axis
+	   //doc =  (lenRate + s/SURFACE* lenRate) * dls
+	   area.doc = (ScoreLen + ScoreS) * (area.dls/100);
+	   g_CandidateArea.push_back(area);
+	   it++;
 	}
 
-
-	std::sort(in_point.begin(),in_point.end(),SortPointUp);
+	//s6 choose destArea
+	int DestLine = 0;
+	if(g_CandidateArea.size() >=2 ) {
+        std::sort(g_CandidateArea.begin(), g_CandidateArea.end(), SortDoc);
+        //if (g_CandidateArea.at(0).doc == g_CandidateArea.at(1).doc) {
+                DestLine = g_CandidateArea.at(0).McIndex;            
+        //}
+	}else if(g_CandidateArea.size() == 0){
+	    printf("no valid g_CandidateArea");
+		getchar();
+	    return ENULL_WAVE;
+	}else{
+		DestLine = g_CandidateArea.at(0).McIndex;  
+	}
+	//get points on up-edges 
+	in_point = StrMcSortAoLen.at(DestLine).PtsEdges;
+	std::sort(in_point.begin(),in_point.end(),SortPointXAo);
 	in.push_back(in_point.at(0));
 	j = 0;
 	for(int i=0; i < in_point.size();i++){		
@@ -504,7 +572,7 @@ int main()
 			}
 		}else ;
 	}
-
+#if 0
 	//insert start and end points
 	vector<Point>::iterator it = in.begin(); 
 	if(in.at(0).x != 1){
@@ -513,7 +581,7 @@ int main()
 	if(in.at(in.size()-1).x != IMG_WIDTH){
 		in.push_back( Point(IMG_WIDTH-1,in.at(in.size()-1).y));
 	}
-
+#endif
 	//计算结果可视化
 	cv::cvtColor(_m_gray,DestRGB,COLOR_GRAY2RGB);
 
@@ -552,7 +620,7 @@ int main()
         if(i>=15 && i < (in.size()-15)) {
             aver = (unsigned int) in[i].y + aver;
         }
-		circle(DestRGB, ipt, 1, Scalar(0X8B, 0xEC, 0xFF), CV_FILLED, CV_AA); //FFEC8B yellow
+		circle(DestRGB, ipt, 2, Scalar(0X8B, 0xEC, 0xFF), CV_FILLED, CV_AA); //FFEC8B yellow
         //printf("av=%d,i=%d,in.y=%d",aver,i,in[i].y);
 	}
 	aver /= (i-30);
@@ -564,7 +632,7 @@ int main()
 	imshow("N=9", DestRGB);
 	//imwrite("DestRGB.jpg",DestRGB);
 	waitKey(0);
-
+	getchar();
 	return 0;
 }
 
