@@ -18,8 +18,8 @@ using namespace cv;
 #define EOVER_PRESSED_WAVE    (-4)
 #define ELIMIT           (-5)
 
-#define LIMIT_WAIST   300
-#define LIMIT_ARM     200
+#define LIMIT_WAIST   250
+#define LIMIT_ARM     140
 enum BODY_PART{
 	PART_WAIST = 0,
 	PART_FACE,

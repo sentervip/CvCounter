@@ -41,6 +41,7 @@ vector<vector<Point> > g_Contours;
 vector<strAreaTag> g_AllArea,g_CandidateArea; //all area and area of lines
 vector<strAreaTag> * pAreaTag = &g_AllArea;
 int part = PART_WAIST;
+int g_LastDepth = 0;
 
 #define INPUT_TITLE "input image"
 #define OUTPUT_TITLE "hist calc"
@@ -162,15 +163,15 @@ int PointClustering(vector<Vec2f> _pts, vector<int> & out)
 	vector<int> pts;
 
 	//get pts and sort
-	if(_pts.size() <=0){
+	if(_pts.size() <1){
 		printf("%s, size：%d\n",__FUNCTION__, _pts.size());
 		return -1;
 	}else if(_pts.size() ==1){
 		pts.push_back(cvRound(_pts[0][0]) );
 		out.push_back(pts.at(0));
 	    return 1;
-	}
-		
+	}else;
+
 	for(i=0;i< _pts.size(); i++){
 		pts.push_back(cvRound(_pts[i][0]) );
 	}
@@ -320,7 +321,6 @@ float getGaussianData(int x)
 int checkImage(Mat SrcBin)
 {
     Mat Src,dest;
-	Mat mean,stddev;
 	int iRet = 0;
 	int i,j,sum = 0;
 	if(SrcBin.size <= 0){
@@ -412,7 +412,7 @@ void GetEdgesYInfo(StrMonmentTag &mc, vector<Point>& DstEdges)
 int main()
 {
 	char dist[40];
-    int i,j,iRet = 0;
+    int i,j,tmp=0,iRet = 0;
     unsigned int aver = 0;
 	float depth;
 	Point pt1, pt2;
@@ -422,11 +422,11 @@ int main()
 	vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
 	Mat DestRGB;
-	Mat m_origin = imread("D:/prj/z1/src/img/slider/f5.png", IMREAD_COLOR);
-	Mat m_gray;  
+	Mat m_origin = imread("D:/prj/z1/src/img/slider/4.jpg", IMREAD_COLOR);
+	Mat m_gray,m_grayEnhance;  
     std::vector<cv::Point> in_point, in;
     Point ipt;
-	
+
 	//s1 preprocess     
 	int w = m_origin.cols;
 	int h = m_origin.rows;
@@ -451,13 +451,24 @@ int main()
 	}
 	imwrite("0gray.jpg", _m_gray);	 
 
-	//_m_gray = _m_gray.mul(1);
-	GaussianBlur(_m_gray, m_gray, Size(3, 3) , 1.0); 
+	_m_gray = _m_gray.mul(1.1);
+	//GaussianBlur(_m_gray, m_gray, Size(3, 3) , 1.0); 
+    GaussianBlur(_m_gray, _m_gray, Size(3, 3 ), 1.0);
+
+    //morphology
+	int g_nElementShape = MORPH_RECT;
+	Mat element = getStructuringElement(g_nElementShape, Size(5, 5) );
+	morphologyEx(_m_gray, m_gray, CV_MOP_ERODE, element);
+	imwrite("2erode.jpg",m_gray);
+	element = getStructuringElement(g_nElementShape, Size(3, 3));
+	morphologyEx(m_gray, m_gray, CV_MOP_DILATE, element);
+    imwrite("3dilate.jpg",m_gray);
+
 	
 	//Bin
 	Mat m_bin;	
 	threshold(m_gray, m_bin, 80, 255, CV_THRESH_OTSU);
-	imwrite("3bin.jpg", m_bin);
+	imwrite("4bin.jpg", m_bin);
 
 	//s2 get contour
 	Mat bMat = m_bin.clone();
@@ -491,15 +502,28 @@ int main()
 	StrMonmentTag mcTag;
 	int d,s;
 	g_MonmentTag.clear();
-    for( i = 0; i< g_Contours.size(); i++ )
-    {	
-		//memset(&mcTag,0,sizeof(StrMonmentTag));
+    for( i = 0; i< g_Contours.size(); i++ ){	
 		mcTag.PtsEdges.clear();
         d =(long int) arcLength( g_Contours[i], true );
         s =(int) contourArea(g_Contours[i]);
 		mcTag.s = s;		
-        if(d < FL_MIN_LENGTH || mcTag.s < FL_MIN_AREA || mc.at(i).y <= (MIN_IMG_Y+15) ){
-            continue;
+        switch (part) {
+            case PART_WAIST:
+                 if (d < FL_MIN_LENGTH || mcTag.s < FL_MIN_AREA || mc.at(i).y <= (MIN_IMG_Y + 15)) {
+                     continue;
+                 }
+                 break;
+            case PART_ARM:
+            case PART_THIGH:
+                 if (d < FL_MIN_LENGTH || mcTag.s < FL_MIN_AREA || mc.at(i).y <= MIN_IMG_Y) {
+                    continue;
+                 }
+                break;
+            default:
+                if (d < FL_MIN_LENGTH || mcTag.s < FL_MIN_AREA || mc.at(i).y <= (MIN_IMG_Y + 15)) {
+                    continue;
+                }
+                break;
         }
 		mcTag.mc = mc.at(i);
 		mcTag.contourIndex = i;
@@ -517,6 +541,11 @@ int main()
 		g_MonmentTag.push_back(mcTag);
 	}
 	imwrite("6mc.jpg", drawing);
+	if(g_MonmentTag.size() <= 0){
+		printf("no valid g_MonmentTag");
+		getchar();
+		return ENULL_WAVE;
+	}
 
 	//s5 get DOC
 	i = 0;
@@ -527,13 +556,23 @@ int main()
 	std::sort(StrMcSortAoLen.begin(),StrMcSortAoLen.end(),SortAoLen);
 	for( vector<StrMonmentTag>::iterator it = StrMcSortAoLen.begin(); it != StrMcSortAoLen.end(); i++){
        area.McIndex = i;
-	   if(StrMcSortAoLen.at(i).AveYAxis > 80){
-	       area.dls = std::exp(-0.007 * StrMcSortAoLen.at(i).AveYAxis) * 159.39; // Y = 159.39e^(-0.007x)
-	   }else{
-		   area.dls = std::exp(0.0102 * StrMcSortAoLen.at(i).AveYAxis) * 44.15; // Y = 44.15^(0.0102x)
-	   }
+       switch(part) {
+           case PART_WAIST:
+               if (StrMcSortAoLen.at(i).mc.y > 80) {
+                   area.dls = std::exp(-0.005 * StrMcSortAoLen.at(i).mc.y) * 139.45; // y = 139.45(e^-0.005x)
+               } else {
+		           area.dls = 71.348 * pow((int)StrMcSortAoLen.at(i).mc.y, 0.0803); //y = 71.348 x^0.0803
+               }
+               break;
+           case PART_ARM:
+               area.dls = -30.03* std::log((float)StrMcSortAoLen.at(i).mc.y) +190.08; //Y= -30.03ln(x)+190.08  
+               break;
+           default:
+               area.dls = -30.03* std::log((float)StrMcSortAoLen.at(i).mc.y) +190.08; //Y= -30.03ln(x)+190.08  
+               break;
+       }
 	   ScoreLen = StrMcSortAoLen.at(i).d *100/IMG_WIDTH; // score of area's length
-	   ScoreS  = (StrMcSortAoLen.at(i).s / SURFACE_REFERENCE* 100);
+	   ScoreS  = (StrMcSortAoLen.at(i).s *100)/ SURFACE_REFERENCE;
 	   ScoreS > 100? ScoreS=100:ScoreS;
 
 	   //len/surface/y axis
@@ -544,20 +583,33 @@ int main()
 	}
 
 	//s6 choose destArea
-	int DestLine = 0;
+	uint32_t DestLine = 0;
 	if(g_CandidateArea.size() >=2 ) {
         std::sort(g_CandidateArea.begin(), g_CandidateArea.end(), SortDoc);
-        //if (g_CandidateArea.at(0).doc == g_CandidateArea.at(1).doc) {
-                DestLine = g_CandidateArea.at(0).McIndex;            
-        //}
+		DestLine = g_CandidateArea.at(0).McIndex; 
+		
+		//resolve limit max data: 在存在多区域情况下，超过预设部位阈值 & 第二个比第一小50pixls以上; & doc>100 | g_last-now <15;则取第二个区域
+		switch(part){
+		case PART_WAIST: 
+			 tmp = LIMIT_WAIST; break;
+		case PART_ARM: 
+			tmp = LIMIT_ARM; break;
+		default: tmp = LIMIT_ARM; break;
+		}
+        if ( StrMcSortAoLen.at(DestLine).mc.y > tmp && (abs(StrMcSortAoLen.at(g_CandidateArea.at(1).McIndex).mc.y - StrMcSortAoLen.at(DestLine).mc.y) > 50) ) {
+            if(g_CandidateArea.at(g_CandidateArea.at(1).McIndex).doc > 60 || (abs(g_LastDepth - StrMcSortAoLen.at(g_CandidateArea.at(1).McIndex).mc.y) < 15) ){
+			    DestLine = g_CandidateArea.at(g_CandidateArea.at(1).McIndex).McIndex;            
+			}
+         }
+		 
 	}else if(g_CandidateArea.size() == 0){
-	    printf("no valid g_CandidateArea");
-		getchar();
-	    return ENULL_WAVE;
+	        printf("no valid g_CandidateArea");
+		    getchar();
+	        return ENULL_WAVE;
 	}else{
 		DestLine = g_CandidateArea.at(0).McIndex;  
 	}
-	//get points on up-edges 
+	//get points on up-edges 	
 	in_point = StrMcSortAoLen.at(DestLine).PtsEdges;
 	std::sort(in_point.begin(),in_point.end(),SortPointXAo);
 	in.push_back(in_point.at(0));
@@ -624,6 +676,7 @@ int main()
         //printf("av=%d,i=%d,in.y=%d",aver,i,in[i].y);
 	}
 	aver /= (i-30);
+	g_LastDepth = aver;
 	memset(dist,0,sizeof(dist));
 	printf("pix:%d", aver);
     sprintf(dist," %d", aver);
